@@ -1,52 +1,54 @@
 # Rive Inspector
 
-Rive (.riv) 文件解析、可视化与性能分析工具集。提供命令行和浏览器两种使用方式，帮助设计师和开发者深入了解 .riv 文件的内部结构和运行时性能特征。
+[中文文档](README_zh.md)
 
-## 功能概览
+A toolkit for parsing, visualizing, and profiling Rive (.riv) files. Available as both CLI and browser-based tools, helping designers and developers understand the internal structure and runtime performance characteristics of .riv files.
 
-- **文本树** — 以缩进树形结构展示 .riv 文件的完整对象层级、属性值和交叉引用
-- **HTML 列表** — 可交互的 HTML 页面，支持展开/折叠、搜索过滤、类别筛选
-- **图形可视化** — Canvas 绘制的交互式节点图，支持平移/缩放、拖拽、右键菜单、属性面板
-- **性能统计** — 渲染复杂度评分、Draw calls 分析、动画/状态机指标、性能警告
-- **Web Inspector** — 独立的浏览器端 .riv 分析器（拖拽文件即用，无需 Python）
+## Features
 
-## 安装要求
+- **Text Tree** — Indented tree view of the full object hierarchy, property values, and cross-references
+- **HTML List** — Interactive HTML page with expand/collapse, search filtering, and category filtering
+- **Graph Visualization** — Canvas-based interactive node graph with pan/zoom, drag, context menu, and property panel
+- **Performance Stats** — Rendering complexity score, draw call analysis, animation/state machine metrics, and warnings
+- **Web Inspector** — Standalone browser-based .riv analyzer (drag & drop, no Python required)
+
+## Requirements
 
 - Python 3.6+
-- 无第三方依赖
+- No third-party dependencies
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 文本树输出
+# Text tree output
 python3 dump_riv.py file.riv
 
-# 交互式 HTML 列表（自动打开浏览器）
+# Interactive HTML list (auto-opens browser)
 python3 dump_riv.py file.riv --html output.html
 
-# 图形可视化（自动打开浏览器）
+# Graph visualization (auto-opens browser)
 python3 dump_riv.py file.riv --graph output.html
 
-# 性能统计
+# Performance stats
 python3 dump_riv.py file.riv --stats
 
-# 查看帮助
+# Help
 python3 dump_riv.py --help
 ```
 
-### Web Inspector（浏览器端）
+### Web Inspector (Browser)
 
-直接在浏览器中打开 `rive-inspector.html`，拖拽 .riv 文件即可分析，包含树形视图、统计图表和图形可视化三个标签页。
+Open `rive-inspector.html` in a browser and drag & drop a .riv file to analyze it. Includes tree view, stats charts, and graph visualization tabs.
 
-重新构建：
+Rebuild:
 
 ```bash
 python3 build_inspector.py
 ```
 
-## 输出模式
+## Output Modes
 
-### 文本树（默认）
+### Text Tree (default)
 
 ```
 [0] Backboard (typeKey=23) @28
@@ -58,60 +60,60 @@ python3 build_inspector.py
         [5] Fill (typeKey=20) @213
 ```
 
-交叉引用自动解析：`objectId: #3 Shape (2)` 表示目标是全局索引 #3 的 Shape。
+Cross-references are auto-resolved: `objectId: #3 Shape (2)` means the target is the Shape at global index #3.
 
-### HTML 列表 (`--html`)
+### HTML List (`--html`)
 
-生成可交互页面：展开/折叠节点、全文搜索、类别过滤、批量展开控制。
+Interactive page with collapsible nodes, full-text search, category filtering, and bulk expand controls.
 
-### 图形可视化 (`--graph`)
+### Graph Visualization (`--graph`)
 
-Canvas 节点图，支持：
-- 鼠标滚轮缩放、拖拽平移
-- 点击节点查看属性、双击展开/折叠
-- 右键菜单（聚焦子树/展开/折叠/恢复）
-- 工具栏快捷视图：Artboard / Timeline / StateMachine
-- 交叉引用可视化（橙色虚线连接）
-- 📊 Stats 按钮查看图形化统计图表
+Canvas node graph with:
+- Scroll to zoom, drag to pan
+- Click nodes to view properties, double-click to expand/collapse
+- Right-click menu (focus subtree / expand / collapse / restore)
+- Toolbar quick views: Artboard / Timeline / StateMachine
+- Cross-reference visualization (orange dashed lines)
+- 📊 Stats button for graphical statistics
 
 <img width="1265" height="562" alt="image" src="https://github.com/user-attachments/assets/f3b4486c-c917-40fa-b345-ad099483b160" />
 
-### 性能统计 (`--stats`)
+### Performance Stats (`--stats`)
 
-输出渲染评分（1~5 星）、每帧渲染成本、热点 Shape、Image 纹理、Mesh 变形、动画复杂度、State Machine 指标和性能警告。
+Outputs rendering score (1–5 stars), per-frame rendering cost, hot Shapes, Image textures, Mesh deformation, animation complexity, State Machine metrics, and performance warnings.
 
 <img width="1852" height="693" alt="image" src="https://github.com/user-attachments/assets/ea082f4c-b1a8-4e97-8a8a-f785d5febd47" />
 
-## 文件说明
+## Files
 
-| 文件 | 说明 |
-|------|------|
-| `dump_riv.py` | 主脚本：.riv 解析器、树构建、文本/HTML/Stats 输出 |
-| `riv_graph.py` | Canvas 图形可视化和 Stats 图表的 HTML 生成模块 |
-| `riv_schema.json` | 从 rive-runtime 源码提取的类型名和属性名映射表 |
-| `build_inspector.py` | 构建 `rive-inspector.html` 的脚本 |
-| `rive-inspector.html` | 独立的浏览器端 .riv 分析器（构建产物） |
-| `RIV_FORMAT.md` | Rive .riv 二进制文件格式技术文档 |
-| `PERFORMANCE_GUIDE.md` | 性能分析指南：各指标含义、阈值、优化建议 |
-| `USAGE.md` | 详细使用说明 |
+| File | Description |
+|------|-------------|
+| `dump_riv.py` | Main script: .riv parser, tree builder, text/HTML/stats output |
+| `riv_graph.py` | Canvas graph visualization and stats chart HTML generator |
+| `riv_schema.json` | Type and property name mappings extracted from rive-runtime source |
+| `build_inspector.py` | Build script for `rive-inspector.html` |
+| `rive-inspector.html` | Standalone browser-based .riv analyzer (build artifact) |
+| `RIV_FORMAT.md` | Rive .riv binary format technical documentation |
+| `PERFORMANCE_GUIDE.md` | Performance analysis guide: metrics, thresholds, optimization tips |
+| `USAGE.md` | Detailed usage instructions |
 
-## 典型工作流
+## Typical Workflow
 
 ```bash
-# 1. 快速评估性能
+# 1. Quick performance assessment
 python3 dump_riv.py animation.riv --stats
 
-# 2. 定位性能瓶颈（图形化）
+# 2. Locate performance bottlenecks (graphical)
 python3 dump_riv.py animation.riv --graph output.html
 
-# 3. 对比优化前后
+# 3. Compare before/after optimization
 python3 dump_riv.py before.riv --stats > before.txt
 python3 dump_riv.py after.riv --stats > after.txt
 diff before.txt after.txt
 ```
 
-## 文档
+## Documentation
 
-- [USAGE.md](USAGE.md) — 完整使用说明和输出示例
-- [PERFORMANCE_GUIDE.md](PERFORMANCE_GUIDE.md) — 性能指标详解与优化检查清单
-- [RIV_FORMAT.md](RIV_FORMAT.md) — .riv 二进制格式技术规范
+- [USAGE.md](USAGE.md) — Full usage instructions and output examples
+- [PERFORMANCE_GUIDE.md](PERFORMANCE_GUIDE.md) — Performance metrics explained with optimization checklist
+- [RIV_FORMAT.md](RIV_FORMAT.md) — .riv binary format specification
