@@ -42,16 +42,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .tkids{display:none}.tkids.open{display:block}
 .csw{display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid #3b4261;vertical-align:middle;margin-right:3px}
 /* Stats */
-.stsec{margin-bottom:16px}
-.stsec h3{font-size:13px;color:#7aa2f7;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #3b4261}
-.strow{display:flex;justify-content:space-between;padding:2px 0;font-size:12px}
-.strow .sk{color:#9aa5ce}.strow .sv{color:#c0caf5}
+.stsec{margin-bottom:10px}
+.stsec h3{font-size:12px;color:#7aa2f7;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid #3b4261}
+.strow{display:flex;padding:1px 0;font-size:12px;gap:12px}
+.strow .sk{color:#9aa5ce;flex-shrink:0}.strow .sv{color:#c0caf5}
 .strow.hot .sv{color:#ff6b6b;font-weight:700}
 .strow.hot .sk::after{content:'🔥';margin-left:4px}
-.stbar{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:11px}
-.stbar .bar{height:14px;border-radius:3px;min-width:2px}
-.stbar .bl{color:#9aa5ce;min-width:90px}.stbar .bv{color:#565f89}
-.stwarn{color:#ffa94d;font-size:12px;padding:3px 0}
+.stbar{display:flex;align-items:center;gap:6px;padding:1px 0;font-size:11px}
+.stbar .bar{height:12px;border-radius:3px;min-width:2px}
+.stbar .bl{color:#9aa5ce;min-width:80px}.stbar .bv{color:#565f89}
+.stwarn{color:#ffa94d;font-size:12px;padding:2px 0}
 /* Graph */
 #tab-graph{padding:0;position:relative}
 #gcanvas{display:block;cursor:grab;width:100%;height:100%}
@@ -331,7 +331,7 @@ function buildTree(objects) {
   for (const n of nodes) {
     if (attached.has(n.obj.index)) continue;
     const tk = n.obj.typeKey;
-    if (tk === 435) { vmStack = [n]; roots.push(n); attached.add(n.obj.index); if(backboard)backboard.children.push(n); }
+    if (tk === 435) { vmStack = [n]; attached.add(n.obj.index); if(backboard){backboard.children.push(n)}else{roots.push(n)} }
     else if (VM_PROP_TYPES.has(tk) && vmStack.length) { vmStack[0].children.push(n); attached.add(n.obj.index); }
     else if (tk === 437 && vmStack.length) { vmStack[0].children.push(n); vmStack = [vmStack[0], n]; attached.add(n.obj.index); }
     else if (VM_INST_VAL_TYPES.has(tk) && vmStack.length >= 2) { vmStack[1].children.push(n); attached.add(n.obj.index); }
@@ -654,7 +654,7 @@ function gNavTo(idx){const nd=gNodes.find(n=>n.obj.index===idx);if(!nd)return;gS
 // Toolbar actions
 function gGoRoot(){gCollapsed.clear();gFocusRoot=null;gLayout();gUpdateBreadcrumb();const root=gNodes.find(n=>n.obj.typeName==='Backboard')||gNodes[0];if(root){gSelectNode(root);gCamX=root._x;gCamY=root._y;gZoom=1.5;gDraw();gShowPanel(root)}}
 function gGoArtboard(){gCollapsed.clear();gFocusRoot=null;function walk(n){if(n.obj.typeName==='Artboard'||n.obj.typeName==='ViewModel')gCollapsed.add(n.obj.index);n.children.forEach(walk)}gTree.forEach(walk);gLayout();gUpdateBreadcrumb();gFit()}
-function gShowTypeOverview(tn){gCollapsed.clear();gFocusRoot=null;function colAll(n){if(n.children.length)gCollapsed.add(n.obj.index);n.children.forEach(colAll)}gTree.forEach(colAll);function uncol(n,anc){if(n.obj.typeName===tn){anc.forEach(a=>gCollapsed.delete(a.obj.index));gCollapsed.add(n.obj.index)}n.children.forEach(c=>uncol(c,[...anc,n]))}gTree.forEach(r=>uncol(r,[]));gLayout();gUpdateBreadcrumb();gFit()}
+function gShowTypeOverview(tn){gCollapsed.clear();gFocusRoot=null;const tns=Array.isArray(tn)?tn:[tn];function colAll(n){if(n.children.length)gCollapsed.add(n.obj.index);n.children.forEach(colAll)}gTree.forEach(colAll);function uncol(n,anc){if(tns.includes(n.obj.typeName)){anc.forEach(a=>gCollapsed.delete(a.obj.index));gCollapsed.add(n.obj.index)}n.children.forEach(c=>uncol(c,[...anc,n]))}gTree.forEach(r=>uncol(r,[]));gLayout();gUpdateBreadcrumb();gFit()}
 function gFocusOn(nd){gFocusRoot=nd;gLayout();gUpdateBreadcrumb();gFit()}
 function gResetFocus(){gFocusRoot=null;gLayout();gUpdateBreadcrumb();gFit()}
 
@@ -888,10 +888,10 @@ function renderStatsView() {
   const fmtB = b => b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(1)+'KB':b+' B';
   const stars = '★'.repeat(s.summary.score) + '☆'.repeat(5-s.summary.score);
   const sm=s.summary, rd=s.renderDetail;
-  let h = '<div style="display:flex;gap:16px;flex-wrap:wrap">';
+  let h = '<div style="display:flex;gap:12px;flex-wrap:wrap">';
 
   // Left column
-  h+='<div style="flex:1;min-width:320px">';
+  h+='<div style="flex:1;min-width:280px">';
 
   h+='<div class="stsec"><h3>'+stars+' '+t('score')+'</h3>';
   h+=sr(t('fileSize'),fmtB(s.file.size));h+=sr(t('objCount'),s.file.objects);
@@ -900,9 +900,9 @@ function renderStatsView() {
 
   // Render cost with donut
   h+='<div class="stsec"><h3>'+t('renderCost')+'</h3>';
-  h+='<div style="display:flex;gap:12px;align-items:center">';
-  h+='<canvas id="stDonut1" width="120" height="120"></canvas>';
-  h+='<div>';
+  h+='<div style="display:flex;gap:16px;align-items:center">';
+  h+='<canvas id="stDonut1" width="110" height="110"></canvas>';
+  h+='<div style="padding:4px 0;line-height:1.8">';
   h+=sr('Draw calls',sm.totalDraws+'/frame',sm.totalDraws>50);
   h+=sr('Clip passes',sm.totalClips,sm.totalClips>10);
   h+=sr('Mesh',sm.totalMeshes,sm.totalMeshes>20);
@@ -916,7 +916,7 @@ function renderStatsView() {
   // Paint breakdown bars
   const pb=rd.paintBreakdown,pr=rd.paintRenderPts;
   if(Object.keys(pb).length){
-    h+='<canvas id="stPaintBars" width="300" height="'+Math.max(40,Object.keys(pb).length*22+8)+'" style="margin-top:6px"></canvas>';
+    h+='<canvas id="stPaintBars" width="300" height="'+Math.max(30,Object.keys(pb).length*17+4)+'" style="margin-top:4px"></canvas>';
   }
   h+='</div>';
 
@@ -931,7 +931,7 @@ function renderStatsView() {
   h+='</div>'; // end left
 
   // Right column
-  h+='<div style="flex:1;min-width:320px">';
+  h+='<div style="flex:1;min-width:280px">';
 
   // Animation with bar chart
   const anims=s.animAnalysis;
@@ -939,7 +939,7 @@ function renderStatsView() {
     const loopA=anims.filter(a=>a.loop==='loop'),recalcA=anims.filter(a=>a.pathRecalcs.length),totalP=anims.reduce((s,a)=>s+a.propsPerFrame,0),totalR=recalcA.reduce((s,a)=>s+a.pathRecalcs.length,0),topH=anims.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame).slice(0,5).filter(a=>a.propsPerFrame>0);
     h+='<div class="stsec"><h3>'+t('anim')+' ('+anims.length+')</h3>';
     h+=sr(t('loopAnim'),loopA.length+'/'+anims.length);h+=sr(t('totalInterp'),totalP);h+=sr(t('pathRecalcAnim'),recalcA.length+(totalR?' ('+t('total')+totalR+'次/帧)':''),recalcA.length>0);
-    if(topH.length)h+='<canvas id="stAnimBars" width="300" height="'+Math.max(40,topH.length*28+8)+'" style="margin-top:6px"></canvas>';
+    if(topH.length)h+='<canvas id="stAnimBars" width="300" height="'+Math.max(30,topH.length*20+4)+'" style="margin-top:4px"></canvas>';
     if(recalcA.length){h+='<div style="margin-top:6px;font-size:11px;color:#ff6b6b">'+t('pathRecalcDetail')+'</div>';for(const a of recalcA.slice(0,5)){const targets=[...new Set(a.pathRecalcs.map(p=>p.target))].slice(0,3).join(', ');h+='<div style="font-size:11px;padding:1px 0"><span style="color:#ffa94d">'+esc(a.name)+'</span>: '+a.pathRecalcs.length+'次 → '+esc(targets)+'</div>'}}
     h+='</div>';
   }
@@ -949,14 +949,14 @@ function renderStatsView() {
   h+='<div class="stsec"><h3>State Machine ('+smd.count+')</h3>';
   h+=sr('Layers',smd.layers,smd.layers>10);h+=sr('Listeners',smd.listeners,smd.listeners>10);
   h+=sr('Conditions',smd.conditions);h+=sr('Inputs',smd.inputs);h+=sr('States',smd.states);h+=sr('Transitions',smd.transitions);
-  if(smd.count)h+='<canvas id="stSmBars" width="300" height="100" style="margin-top:6px"></canvas>';
+  if(smd.count)h+='<canvas id="stSmBars" width="300" height="80" style="margin-top:4px"></canvas>';
   h+='</div>';
 
   // Distribution with donut
   const dist=s.distribution;
   h+='<div class="stsec"><h3>'+t('distTitle')+'</h3>';
   h+='<div style="display:flex;gap:12px;align-items:center">';
-  h+='<canvas id="stDonut2" width="130" height="130"></canvas>';
+  h+='<canvas id="stDonut2" width="110" height="110"></canvas>';
   h+='<div id="stDistLeg" style="font-size:11px"></div>';
   h+='</div></div>';
 
@@ -984,17 +984,17 @@ function drawStatsCharts(s){
   const DC={drawPath:'Fill/Stroke draw call',clipPath:'Stencil clip pass',drawImage:'Texture bindraw',drawImageMesh:'Mesh skinning+draw'};
   const d1=document.getElementById('stDonut1');
   if(d1){const data=[['drawPath',sm.totalDraws,'#ffa94d'],['clipPath',sm.totalClips,'#f06595'],['drawImage',sm.totalImages,'#748ffc'],['drawImageMesh',sm.totalMeshes,'#da77f2']].filter(d=>d[1]>0);
-    function dr1(hi){const c=d1.getContext('2d');c.clearRect(0,0,d1.width,d1.height);return stDonut(c,60,60,48,25,data,hi)}
+    function dr1(hi){const c=d1.getContext('2d');c.clearRect(0,0,d1.width,d1.height);return stDonut(c,55,55,44,22,data,hi)}
     const rg=dr1(-1);addHover(d1,rg.map(r=>({...r,desc:DC[r.label]||''})),dr1)}
   const pbC=document.getElementById('stPaintBars');
-  if(pbC){const items=Object.entries(rd.paintBreakdown).sort((a,b)=>b[1]-a[1]);const pr=rd.paintRenderPts,maxV=Math.max(...items.map(d=>d[1]),1);pbC.width=pbC.parentElement.clientWidth-16||300;const barH=18,gap=4,tp=2;pbC.height=items.length*(barH+gap)+tp;
+  if(pbC){const items=Object.entries(rd.paintBreakdown).sort((a,b)=>b[1]-a[1]);const pr=rd.paintRenderPts,maxV=Math.max(...items.map(d=>d[1]),1);pbC.width=pbC.parentElement.clientWidth-16||300;const barH=14,gap=3,tp=2;pbC.height=items.length*(barH+gap)+tp;
     const cols={'Fill+Solid':'#ffa94d','Fill+Linear':'#da77f2','Fill+Radial':'#f06595','Stroke+Solid':'#ff6b6b','Stroke+Linear':'#748ffc','Stroke+Radial':'#e8590c'};const rg=[];
     function drPB(hi){const c=pbC.getContext('2d');c.clearRect(0,0,pbC.width,pbC.height);c.font='11px -apple-system,sans-serif';rg.length=0;
       items.forEach(([key,cnt],i)=>{const y=tp+i*(barH+gap);const w=Math.max(cnt/maxV*(pbC.width-220),4);const cl=cols[key]||'#565f89';c.fillStyle=i===hi?lc(cl):cl;c.fillRect(100,y,w,barH);if(i===hi){c.strokeStyle='#fff';c.lineWidth=1;c.strokeRect(100,y,w,barH)}c.fillStyle='#9aa5ce';c.textBaseline='middle';c.textAlign='right';c.fillText(key,95,y+barH/2);c.textAlign='left';c.fillStyle='#c0caf5';c.fillText(cnt+'x '+(pr[key]||0)+'pts',105+w,y+barH/2);rg.push({x:0,y,w:pbC.width,h:barH,label:key,value:cnt+'x, '+(pr[key]||0)+' render pts',desc:key})})}
     drPB(-1);addHover(pbC,rg,drPB)}
   const abC=document.getElementById('stAnimBars');
   if(abC){const topH=s.animAnalysis.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame).slice(0,5).filter(a=>a.propsPerFrame>0);
-    if(topH.length){const maxP=Math.max(...topH.map(a=>a.propsPerFrame),1);abC.width=abC.parentElement.clientWidth-16||300;const barH=22,gap=6,tp=2;abC.height=topH.length*(barH+gap)+tp;const rg=[];
+    if(topH.length){const maxP=Math.max(...topH.map(a=>a.propsPerFrame),1);abC.width=abC.parentElement.clientWidth-16||300;const barH=16,gap=4,tp=2;abC.height=topH.length*(barH+gap)+tp;const rg=[];
       function drAB(hi){const c=abC.getContext('2d');c.clearRect(0,0,abC.width,abC.height);c.font='11px -apple-system,sans-serif';rg.length=0;
         topH.forEach((a,i)=>{const y=tp+i*(barH+gap);const w=Math.max(a.propsPerFrame/maxP*(abC.width-180),4);const hr=a.pathRecalcs.length;const cl=hr?'#ff6b6b':'#69db7c';c.fillStyle=i===hi?lc(cl):cl;c.fillRect(90,y,w,barH);if(i===hi){c.strokeStyle='#fff';c.lineWidth=1;c.strokeRect(90,y,w,barH)}c.fillStyle='#9aa5ce';c.textBaseline='middle';c.textAlign='right';c.fillText(a.name.substring(0,10),85,y+barH/2);c.textAlign='left';c.fillStyle='#c0caf5';c.fillText(a.propsPerFrame+t('propPerFrame')+(hr?' 🔥'+hr:''),95+w,y+barH/2);rg.push({x:0,y,w:abC.width,h:barH,label:a.name,value:a.propsPerFrame+' '+t('propPerFrame')+' ('+a.loop+')',desc:hr?hr+t('recalc'):'No path recalc'})})}
       drAB(-1);addHover(abC,rg,drAB)}}
@@ -1007,7 +1007,7 @@ function drawStatsCharts(s){
     drSB(-1);addHover(sbC,rg,drSB)}
   const d2=document.getElementById('stDonut2');
   if(d2){const dist=s.distribution;const data=Object.entries(dist).map(([cat,cnt])=>[cat,cnt,CAT_COLORS[cat]||CAT_COLORS.other]).filter(d=>d[1]>0);const total=data.reduce((s,d)=>s+d[1],0);
-    function dr2(hi){const c=d2.getContext('2d');c.clearRect(0,0,d2.width,d2.height);return stDonut(c,65,65,55,30,data,hi)}
+    function dr2(hi){const c=d2.getContext('2d');c.clearRect(0,0,d2.width,d2.height);return stDonut(c,55,55,44,22,data,hi)}
     const rg=dr2(-1);addHover(d2,rg.map(r=>({...r,desc:Math.round(r.value/total*100)+'%'})),dr2);
     const leg=document.getElementById('stDistLeg');if(leg)leg.innerHTML=data.map(d=>'<div style="display:flex;align-items:center;gap:4px;padding:1px 0"><span style="width:8px;height:8px;border-radius:50%;background:'+d[2]+';flex-shrink:0"></span><span style="color:#9aa5ce;flex:1">'+esc(d[0])+'</span><span style="color:#c0caf5">'+d[1]+'</span></div>').join('')}
 }
@@ -1032,16 +1032,17 @@ function renderGraphView() {
       <button class="gbtn" onclick="gGoArtboard()">Artboard</button>
       <button class="gbtn" onclick="gShowTypeOverview('LinearAnimation')">Timeline</button>
       <button class="gbtn" onclick="gShowTypeOverview('StateMachine')">StateMachine</button>
+      <button class="gbtn" onclick="gShowTypeOverview(['AnimationState','EntryState','ExitState','AnyState','BlendStateDirect','BlendState1DInput','BlendState1DViewModel'])">State</button>
       <button class="gbtn" onclick="gShowSchema()">Schema</button>
     </div>
     <div id="gbreadcrumb" style="position:absolute;top:40px;left:8px;font-size:11px;z-index:5"></div>
-    <div class="gpanel"><p style="color:#565f89;padding:20px">点击节点查看属性</p></div>
+    <div class="gpanel"><p style="color:#565f89;padding:20px">${t('clickNode')}</p></div>
     <div id="gctx" style="display:none;position:fixed;background:#24283b;border:1px solid #3b4261;border-radius:6px;padding:4px 0;z-index:50;min-width:180px">
-      <div id="gctxFocus" class="trow" onclick="gCtxAction('focus')" style="padding:6px 14px;font-size:12px">'+t('focusSub')+'</div>
-      <div id="gctxExpand" class="trow" onclick="gCtxAction('expand')" style="padding:6px 14px;font-size:12px">'+t('expandKids')+'</div>
-      <div id="gctxCollapse" class="trow" onclick="gCtxAction('collapse')" style="padding:6px 14px;font-size:12px">'+t('collapseKids')+'</div>
+      <div id="gctxFocus" class="trow" onclick="gCtxAction('focus')" style="padding:6px 14px;font-size:12px">${t('focusSub')}</div>
+      <div id="gctxExpand" class="trow" onclick="gCtxAction('expand')" style="padding:6px 14px;font-size:12px">${t('expandKids')}</div>
+      <div id="gctxCollapse" class="trow" onclick="gCtxAction('collapse')" style="padding:6px 14px;font-size:12px">${t('collapseKids')}</div>
       <div style="border-top:1px solid #3b4261;margin:2px 0"></div>
-      <div class="trow" onclick="gCtxAction('reset')" style="padding:6px 14px;font-size:12px">'+t('showAll')+'</div>
+      <div class="trow" onclick="gCtxAction('reset')" style="padding:6px 14px;font-size:12px">${t('showAll')}</div>
     </div>
     <div id="gschema" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:center" onclick="if(event.target===this)this.style.display='none'">
       <div style="background:#24283b;border:1px solid #3b4261;border-radius:8px;width:600px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden">
