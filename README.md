@@ -78,6 +78,8 @@ Canvas 节点图，支持：
 
 输出渲染评分（1~5 星）、每帧渲染成本、热点 Shape、Image 纹理、Mesh 变形、动画复杂度、State Machine 指标和性能警告。
 
+<img width="1852" height="693" alt="image" src="https://github.com/user-attachments/assets/ea082f4c-b1a8-4e97-8a8a-f785d5febd47" />
+
 ## 文件说明
 
 | 文件 | 说明 |
