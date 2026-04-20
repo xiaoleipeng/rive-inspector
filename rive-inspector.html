@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rive Inspector</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#1a1b26;color:#c0caf5;height:100vh;overflow:hidden}
+.hidden{display:none!important}
+#dropzone{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;border:3px dashed #3b4261;margin:20px;border-radius:16px;transition:border-color .2s}
+#dropzone.over{border-color:#7aa2f7;background:rgba(122,162,247,.05)}
+.drop-icon{font-size:64px;margin-bottom:16px}
+#dropzone h1{color:#7aa2f7;font-size:24px;margin-bottom:8px}
+#dropzone p{color:#565f89;font-size:14px}
+.link{color:#7aa2f7;cursor:pointer;text-decoration:underline}
+#main{display:flex;flex-direction:column;height:100vh}
+#topbar{display:flex;align-items:center;padding:8px 16px;background:#24283b;border-bottom:1px solid #3b4261;gap:12px}
+#filename{color:#7aa2f7;font-weight:600;font-size:14px;margin-right:auto}
+#tabs{display:flex;gap:2px}
+.tab{background:none;border:none;color:#565f89;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-family:inherit}
+.tab:hover{color:#c0caf5;background:#3b4261}
+.tab.active{color:#7aa2f7;background:#1f2335}
+.btn-sm{background:#3b4261;border:none;color:#9aa5ce;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-family:inherit}
+.btn-sm:hover{background:#565f89;color:#c0caf5}
+.tabcontent{flex:1;overflow:auto;display:none;padding:12px 16px}
+.tabcontent.active{display:block}
+/* Tree */
+.tnode{margin-left:18px}
+.trow{display:flex;align-items:center;padding:2px 6px;cursor:pointer;border-radius:3px;gap:6px;font-size:13px;white-space:nowrap}
+.trow:hover{background:#24283b}
+.tarr{color:#565f89;font-size:9px;width:12px;text-align:center;transition:transform .15s;flex-shrink:0}
+.tarr.open{transform:rotate(90deg)}
+.tarr.leaf{visibility:hidden}
+.tidx{color:#565f89;font-size:11px;min-width:32px}
+.tbadge{padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;color:#1a1b26}
+.tname{color:#c0caf5;font-weight:500}
+.tprops{padding:2px 0 4px 50px;display:none;font-size:12px}
+.tprops.open{display:block}
+.tprop{display:flex;gap:6px;padding:1px 4px}
+.tprop:hover{background:#1f2335;border-radius:2px}
+.tpk{color:#9aa5ce;min-width:140px}
+.tpv{color:#c0caf5}.tpv.s{color:#9ece6a}.tpv.n{color:#ff9e64}.tpv.c{color:#f7768e}.tpv.b{color:#bb9af7}
+.tkids{display:none}.tkids.open{display:block}
+.csw{display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid #3b4261;vertical-align:middle;margin-right:3px}
+/* Stats */
+.stsec{margin-bottom:16px}
+.stsec h3{font-size:13px;color:#7aa2f7;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #3b4261}
+.strow{display:flex;justify-content:space-between;padding:2px 0;font-size:12px}
+.strow .sk{color:#9aa5ce}.strow .sv{color:#c0caf5}
+.strow.hot .sv{color:#ff6b6b;font-weight:700}
+.strow.hot .sk::after{content:'🔥';margin-left:4px}
+.stbar{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:11px}
+.stbar .bar{height:14px;border-radius:3px;min-width:2px}
+.stbar .bl{color:#9aa5ce;min-width:90px}.stbar .bv{color:#565f89}
+.stwarn{color:#ffa94d;font-size:12px;padding:3px 0}
+/* Graph */
+#tab-graph{padding:0;position:relative}
+#gcanvas{display:block;cursor:grab;width:100%;height:100%}
+#gcanvas.grabbing{cursor:grabbing}
+.gpanel{position:absolute;right:0;top:0;bottom:0;width:320px;background:#24283b;border-left:1px solid #3b4261;overflow-y:auto;padding:12px;font-size:12px}
+.gpanel h3{font-size:12px;color:#7aa2f7;margin-bottom:6px}
+.gbar{position:absolute;top:8px;left:8px;display:flex;gap:4px;z-index:5}
+.gbtn{background:rgba(36,40,59,.9);border:1px solid #3b4261;color:#9aa5ce;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px}
+.gbtn:hover{background:#3b4261;color:#c0caf5}
+/* Export */
+#tab-export .exp-btn{display:inline-block;background:#3b4261;color:#c0caf5;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px;margin:8px 4px;font-family:inherit}
+#tab-export .exp-btn:hover{background:#7aa2f7;color:#1a1b26}
+/* Search */
+.search{background:#1a1b26;border:1px solid #3b4261;color:#c0caf5;padding:6px 10px;border-radius:4px;font:inherit;font-size:12px;outline:none;width:300px;margin-bottom:8px}
+.search:focus{border-color:#7aa2f7}
+</style>
+</head><body>
+<div id="app">
+<div id="dropzone">
+<div class="drop-icon">📦</div>
+<h1>Rive Inspector</h1>
+<p>拖拽 .riv 文件到此处，或 <label for="fileinput" class="link">点击选择文件</label></p>
+<input type="file" id="fileinput" accept=".riv" hidden>
+</div>
+<div id="main" class="hidden">
+<div id="topbar">
+<span id="filename"></span>
+<div id="tabs">
+<button class="tab active" data-tab="tree">🌳 树形</button>
+<button class="tab" data-tab="stats">📊 统计</button>
+<button class="tab" data-tab="graph">🔗 图形</button>
+<button class="tab" data-tab="export">💾 导出</button>
+</div>
+<button id="newfile" class="btn-sm">Open</button>
+<button id="langBtn" class="btn-sm" onclick="toggleLang()">EN</button>
+</div>
+<div id="tab-tree" class="tabcontent active"></div>
+<div id="tab-stats" class="tabcontent"></div>
+<div id="tab-graph" class="tabcontent"><canvas id="gcanvas"></canvas></div>
+<div id="tab-export" class="tabcontent"></div>
+</div>
+</div>
+<script>
+// Schema
+const SCHEMA={"type_names": {"11": "ContainerComponent", "513": "ForegroundLayoutDrawable", "38": "TransformComponent", "93": "NestedAnimation", "23": "Backboard", "130": "CustomPropertyString", "10": "Component", "1": "Artboard", "559": "ArtboardComponentList", "129": "CustomPropertyBoolean", "49": "DrawRules", "167": "CustomProperty", "128": "Event", "13": "Drawable", "127": "CustomPropertyNumber", "452": "NestedArtboardLayout", "131": "OpenUrlEvent", "548": "CustomPropertyGroup", "48": "DrawTarget", "409": "LayoutComponent", "147": "Solo", "148": "Joystick", "2": "Node", "451": "NestedArtboardLeaf", "91": "WorldTransformComponent", "407": "AudioEvent", "92": "NestedArtboard", "163": "CubicInterpolatorComponent", "64": "ExitState", "68": "TransitionTriggerCondition", "118": "ListenerNumberChange", "478": "TransitionPropertyComparator", "69": "TransitionValueCondition", "73": "BlendStateDirect", "174": "ElasticInterpolator", "476": "TransitionCondition", "97": "NestedLinearAnimation", "70": "TransitionNumberCondition", "96": "NestedSimpleAnimation", "57": "StateMachineLayer", "126": "ListenerAlignTarget", "65": "StateTransition", "95": "NestedStateMachine", "59": "StateMachineBool", "53": "StateMachine", "29": "KeyFrame", "26": "KeyedProperty", "450": "KeyFrameUint", "74": "BlendAnimation", "497": "TransitionArtboardCondition", "30": "KeyFrameDouble", "55": "StateMachineInput", "115": "ListenerTriggerChange", "487": "ListenerViewModelChange", "485": "TransitionValueEnumComparator", "477": "TransitionComparator", "25": "KeyedObject", "483": "TransitionValueColorComparator", "482": "TransitionViewModelCondition", "71": "TransitionBoolCondition", "168": "ListenerFireEvent", "54": "StateMachineComponent", "142": "KeyFrameString", "480": "TransitionValueComparator", "62": "AnyState", "66": "StateMachineLayerComponent", "37": "KeyFrameColor", "138": "CubicValueInterpolator", "28": "CubicEaseInterpolator", "528": "BlendState1DViewModel", "145": "AdvanceableState", "75": "BlendAnimation1D", "139": "CubicInterpolator", "61": "AnimationState", "60": "LayerState", "76": "BlendState1DInput", "171": "KeyFrameCallback", "77": "BlendAnimationDirect", "72": "BlendState", "56": "StateMachineNumber", "63": "EntryState", "50": "KeyFrameId", "505": "TransitionValueTriggerComparator", "98": "NestedRemapAnimation", "169": "StateMachineFireEvent", "479": "TransitionPropertyViewModelComparator", "27": "Animation", "124": "NestedNumber", "31": "LinearAnimation", "170": "InterpolatingKeyFrame", "67": "TransitionInputCondition", "527": "BlendState1D", "125": "ListenerAction", "496": "TransitionPropertyArtboardComparator", "84": "KeyFrameBool", "486": "TransitionValueStringComparator", "121": "NestedInput", "116": "ListenerInputChange", "114": "StateMachineListener", "484": "TransitionValueNumberComparator", "117": "ListenerBoolChange", "175": "KeyFrameInterpolator", "123": "NestedBool", "481": "TransitionValueBooleanComparator", "122": "NestedTrigger", "78": "BlendStateTransition", "58": "StateMachineTrigger", "144": "TextStyleAxis", "546": "TextTargetModifier", "547": "TextFollowPathModifier", "137": "TextStyle", "162": "TextVariationModifier", "134": "Text", "159": "TextModifierGroup", "161": "TextShapeModifier", "160": "TextModifier", "158": "TextModifierRange", "164": "TextStyleFeature", "135": "TextValueRun", "9": "BindableProperty", "446": "DataBind", "474": "BindablePropertyEnum", "503": "BindablePropertyTrigger", "472": "BindablePropertyBoolean", "475": "BindablePropertyColor", "473": "BindablePropertyNumber", "447": "DataBindContext", "471": "BindablePropertyString", "534": "DataConverterInterpolator", "504": "DataConverterTrigger", "532": "DataConverterStringTrim", "531": "DataConverterStringRemoveZeros", "519": "DataConverterRangeMapper", "530": "DataConverterStringPad", "489": "DataConverterRounder", "514": "DataConverterSystemDegsToRads", "515": "DataConverterSystemNormalizer", "517": "DataConverterOperationViewModel", "535": "DataConverterBooleanNegate", "516": "DataConverterOperation", "490": "DataConverterToString", "488": "DataConverter", "500": "DataConverterOperationValue", "498": "DataConverterGroupItem", "536": "DataConverterFormula", "499": "DataConverterGroup", "541": "FormulaTokenOperation", "544": "FormulaTokenParenthesisOpen", "539": "FormulaTokenParenthesis", "538": "FormulaTokenArgumentSeparator", "545": "FormulaTokenInput", "542": "FormulaTokenFunction", "537": "FormulaToken", "540": "FormulaTokenParenthesisClose", "543": "FormulaTokenValue", "508": "NSlicedNode", "492": "Axis", "494": "AxisY", "495": "AxisX", "493": "NSlicer", "420": "LayoutComponentStyle", "491": "NSlicerTileMode", "12": "Path", "14": "PathVertex", "36": "CubicVertex", "35": "CubicMirroredVertex", "52": "Star", "111": "ContourMeshVertex", "108": "MeshVertex", "100": "Image", "6": "CubicDetachedVertex", "8": "Triangle", "107": "Vertex", "16": "PointsPath", "42": "ClippingShape", "15": "ParametricPath", "3": "Shape", "4": "Ellipse", "109": "Mesh", "34": "CubicAsymmetricVertex", "7": "Rectangle", "51": "Polygon", "5": "StraightVertex", "24": "Stroke", "507": "Dash", "20": "Fill", "19": "GradientStop", "21": "ShapePaint", "18": "SolidColor", "47": "TrimPath", "506": "DashPath", "22": "LinearGradient", "533": "Feather", "17": "RadialGradient", "85": "TransformComponentConstraint", "81": "IKConstraint", "88": "ScaleConstraint", "87": "TranslationConstraint", "82": "DistanceConstraint", "79": "Constraint", "80": "TargetedConstraint", "83": "TransformConstraint", "90": "TransformSpaceConstraint", "520": "DraggableConstraint", "165": "FollowPathConstraint", "86": "TransformComponentConstraintY", "89": "RotationConstraint", "525": "ElasticScrollPhysics", "523": "ScrollPhysics", "524": "ClampedScrollPhysics", "522": "ScrollBarConstraint", "521": "ScrollConstraint", "435": "ViewModel", "439": "ViewModelPropertyEnumCustom", "430": "ViewModelProperty", "511": "ViewModelPropertyEnumSystem", "427": "ViewModelInstanceListItem", "432": "ViewModelInstanceEnum", "426": "ViewModelInstanceColor", "431": "ViewModelPropertyNumber", "438": "DataEnumCustom", "501": "ViewModelInstanceTrigger", "441": "ViewModelInstanceList", "428": "ViewModelInstanceValue", "512": "DataEnumSystem", "429": "ViewModelComponent", "510": "DataEnum", "436": "ViewModelPropertyViewModel", "437": "ViewModelInstance", "445": "DataEnumValue", "449": "ViewModelInstanceBoolean", "440": "ViewModelPropertyColor", "444": "ViewModelInstanceViewModel", "434": "ViewModelPropertyList", "448": "ViewModelPropertyBoolean", "443": "ViewModelPropertyString", "509": "ViewModelPropertyEnum", "433": "ViewModelInstanceString", "442": "ViewModelInstanceNumber", "502": "ViewModelPropertyTrigger", "39": "SkeletalComponent", "40": "Bone", "44": "Tendon", "46": "CubicWeight", "45": "Weight", "43": "Skin", "41": "RootBone", "104": "DrawableAsset", "106": "FileAssetContents", "102": "Folder", "422": "ExportAudio", "105": "ImageAsset", "141": "FontAsset", "103": "FileAsset", "406": "AudioAsset", "99": "Asset"}, "property_fields": {"549": 0, "550": 0, "554": 0, "574": 0, "560": 0, "708": 0, "709": 0, "5": 0, "566": 0, "687": 0, "577": 0, "119": 0, "120": 0, "173": 0, "178": 0, "179": 0, "180": 0, "195": 0, "175": 0, "731": 0, "722": 0, "727": 0, "726": 0, "725": 0, "23": 0, "129": 0, "197": 0, "800": 0, "198": 0, "296": 0, "665": 0, "666": 0, "667": 0, "668": 0, "672": 0, "673": 0, "705": 0, "655": 0, "656": 0, "632": 0, "589": 0, "590": 0, "591": 0, "596": 0, "597": 0, "598": 0, "599": 0, "600": 0, "601": 0, "602": 0, "603": 0, "604": 0, "605": 0, "607": 0, "608": 0, "609": 0, "610": 0, "611": 0, "612": 0, "613": 0, "614": 0, "615": 0, "616": 0, "617": 0, "618": 0, "619": 0, "620": 0, "621": 0, "622": 0, "623": 0, "624": 0, "625": 0, "626": 0, "627": 0, "628": 0, "629": 0, "630": 0, "389": 0, "536": 0, "689": 0, "67": 0, "68": 0, "69": 0, "631": 0, "227": 0, "400": 0, "149": 0, "237": 0, "51": 0, "165": 0, "168": 0, "298": 0, "155": 0, "53": 0, "224": 0, "225": 0, "399": 0, "122": 0, "228": 0, "240": 0, "156": 0, "650": 0, "167": 0, "151": 0, "152": 0, "158": 0, "160": 0, "349": 0, "350": 0, "537": 0, "392": 0, "393": 0, "56": 0, "57": 0, "59": 0, "60": 0, "61": 0, "405": 0, "653": 0, "171": 0, "747": 0, "48": 0, "49": 0, "748": 0, "117": 0, "40": 0, "128": 0, "92": 0, "93": 0, "125": 0, "206": 0, "121": 0, "494": 0, "236": 0, "583": 0, "301": 0, "302": 0, "312": 0, "313": 0, "249": 0, "686": 0, "586": 0, "587": 0, "660": 0, "682": 0, "713": 0, "714": 0, "715": 0, "757": 0, "758": 0, "679": 0, "669": 0, "743": 0, "745": 0, "746": 0, "775": 0, "776": 0, "764": 0, "765": 0, "637": 0, "538": 0, "102": 0, "103": 0, "95": 0, "110": 0, "111": 0, "112": 0, "113": 0, "316": 0, "325": 0, "326": 0, "378": 0, "778": 0, "356": 0, "357": 0, "320": 0, "335": 0, "279": 0, "289": 0, "281": 0, "284": 0, "287": 0, "377": 0, "683": 0, "685": 0, "272": 0, "204": 0, "408": 0, "555": 3, "88": 3, "651": 3, "37": 3, "38": 3, "638": 3, "557": 1, "572": 1, "561": 1, "4": 1, "578": 1, "579": 1, "55": 1, "138": 1, "280": 1, "654": 1, "248": 1, "662": 1, "744": 1, "766": 1, "635": 1, "268": 1, "246": 1, "203": 1, "362": 1, "593": 5, "188": 5, "189": 5, "190": 5, "191": 5, "192": 5, "193": 5, "194": 5, "174": 5, "364": 5, "365": 5, "724": 5, "734": 5, "676": 5, "606": 5, "639": 5, "201": 5, "181": 5, "541": 5, "647": 5, "238": 5, "62": 5, "376": 5, "141": 5, "41": 5, "691": 5, "693": 5, "50": 5, "752": 5, "770": 5, "32": 5, "164": 5, "94": 5, "245": 5, "196": 5, "634": 5, "333": 5, "779": 5, "782": 5, "703": 5, "575": 2, "243": 2, "172": 2, "177": 2, "182": 2, "183": 2, "184": 2, "185": 2, "186": 2, "187": 2, "363": 2, "759": 2, "760": 2, "761": 2, "762": 2, "763": 2, "728": 2, "729": 2, "730": 2, "372": 2, "373": 2, "18": 2, "15": 2, "16": 2, "17": 2, "13": 2, "9": 2, "14": 2, "10": 2, "806": 2, "807": 2, "808": 2, "809": 2, "810": 2, "811": 2, "663": 2, "664": 2, "675": 2, "498": 2, "499": 2, "500": 2, "501": 2, "502": 2, "503": 2, "504": 2, "505": 2, "506": 2, "507": 2, "508": 2, "509": 2, "510": 2, "511": 2, "512": 2, "513": 2, "514": 2, "515": 2, "516": 2, "517": 2, "518": 2, "519": 2, "520": 2, "521": 2, "522": 2, "523": 2, "524": 2, "592": 2, "640": 2, "641": 2, "642": 2, "643": 2, "697": 2, "698": 2, "699": 2, "700": 2, "200": 2, "199": 2, "292": 2, "297": 2, "140": 2, "63": 2, "64": 2, "65": 2, "66": 2, "157": 2, "337": 2, "338": 2, "339": 2, "340": 2, "229": 2, "70": 2, "58": 2, "652": 2, "406": 2, "407": 2, "239": 2, "202": 2, "166": 2, "690": 2, "42": 2, "33": 2, "34": 2, "35": 2, "46": 2, "692": 2, "47": 2, "39": 2, "749": 2, "750": 2, "751": 2, "114": 2, "115": 2, "116": 2, "24": 2, "25": 2, "215": 2, "216": 2, "781": 2, "26": 2, "79": 2, "80": 2, "81": 2, "20": 2, "21": 2, "123": 2, "124": 2, "31": 2, "161": 2, "162": 2, "163": 2, "82": 2, "83": 2, "126": 2, "127": 2, "380": 2, "381": 2, "84": 2, "85": 2, "86": 2, "87": 2, "7": 2, "8": 2, "706": 2, "707": 2, "11": 2, "12": 2, "299": 2, "300": 2, "303": 2, "304": 2, "307": 2, "308": 2, "305": 2, "306": 2, "681": 2, "716": 2, "717": 2, "718": 2, "719": 2, "756": 2, "777": 2, "636": 2, "644": 2, "645": 2, "89": 2, "90": 2, "91": 2, "104": 2, "105": 2, "106": 2, "107": 2, "108": 2, "109": 2, "96": 2, "97": 2, "98": 2, "99": 2, "100": 2, "101": 2, "327": 2, "336": 2, "334": 2, "317": 2, "318": 2, "319": 2, "783": 2, "784": 2, "785": 2, "786": 2, "321": 2, "328": 2, "329": 2, "324": 2, "322": 2, "323": 2, "332": 2, "330": 2, "331": 2, "274": 2, "370": 2, "390": 2, "288": 2, "285": 2, "286": 2, "366": 2, "367": 2, "371": 2, "207": 2, "208": 2, "530": 2, "582": 4, "223": 4, "711": 4, "588": 4, "359": 4, "212": 4}, "property_names": {"15": "rotation", "16": "scaleX", "17": "scaleY", "198": "animationId", "246": "propertyValue", "4": "name", "5": "parentId", "11": "originX", "12": "originY", "236": "defaultStateMachineId", "583": "viewModelId", "800": "listSource", "245": "propertyValue", "121": "drawTargetId", "395": "trigger", "23": "blendModeValue", "129": "drawableFlags", "243": "propertyValue", "663": "instanceWidth", "664": "instanceHeight", "665": "instanceWidthUnitsValue", "666": "instanceHeightUnitsValue", "667": "instanceWidthScaleType", "668": "instanceHeightScaleType", "248": "url", "249": "targetValue", "119": "drawableId", "120": "placementValue", "196": "clip", "7": "width", "8": "height", "494": "styleId", "706": "fractionalWidth", "707": "fractionalHeight", "296": "activeComponentId", "299": "x", "300": "y", "303": "posX", "304": "posY", "307": "originX", "308": "originY", "305": "width", "306": "height", "301": "xId", "302": "yId", "312": "joystickFlags", "313": "handleSourceId", "13": "x", "9": "xArtboard", "14": "y", "10": "yArtboard", "806": "computedLocalX", "807": "computedLocalY", "808": "computedWorldX", "809": "computedWorldY", "810": "computedWidth", "811": "computedHeight", "538": "fit", "644": "alignmentX", "645": "alignmentY", "18": "opacity", "408": "assetId", "197": "artboardId", "582": "dataBindPathIds", "337": "x1", "338": "y1", "339": "x2", "340": "y2", "229": "value", "156": "opValue", "405": "easingValue", "406": "amplitude", "407": "period", "200": "mix", "157": "value", "199": "speed", "201": "isPlaying", "240": "targetId", "541": "preserveOffset", "151": "stateToId", "152": "flags", "158": "duration", "160": "exitTime", "349": "interpolationType", "350": "interpolatorId", "537": "randomWeight", "141": "value", "67": "frame", "53": "propertyKey", "631": "value", "165": "animationId", "70": "value", "653": "value", "51": "objectId", "651": "value", "650": "opValue", "389": "eventId", "138": "name", "280": "value", "88": "value", "292": "speed", "166": "value", "63": "x1", "64": "y1", "65": "x2", "66": "y2", "149": "animationId", "536": "flags", "167": "inputId", "168": "inputId", "297": "mixValue", "298": "blendSource", "140": "value", "122": "value", "689": "value", "202": "time", "392": "eventId", "393": "occursValue", "55": "name", "239": "nestedValue", "56": "fps", "57": "duration", "58": "speed", "59": "loopValue", "60": "workStart", "61": "workEnd", "62": "enableWorkArea", "376": "quantize", "68": "interpolationType", "69": "interpolatorId", "155": "inputId", "677": "propertyType", "181": "value", "654": "value", "237": "inputId", "227": "inputId", "400": "nestedInputId", "224": "targetId", "225": "listenerTypeValue", "399": "eventId", "652": "value", "228": "value", "238": "nestedValue", "647": "value", "401": "fire", "171": "exitBlendAnimationId", "289": "tag", "288": "axisValue", "778": "targetId", "779": "radial", "782": "orient", "783": "start", "784": "end", "785": "strength", "786": "offset", "274": "fontSize", "370": "lineHeight", "390": "letterSpacing", "279": "fontAssetId", "320": "axisTag", "321": "axisValue", "281": "alignValue", "284": "sizingValue", "287": "overflowValue", "285": "width", "286": "height", "366": "originX", "367": "originY", "371": "paragraphSpacing", "377": "originValue", "683": "wrapValue", "685": "verticalAlignValue", "703": "fitFromBaseline", "335": "modifierFlags", "328": "originX", "329": "originY", "324": "opacity", "322": "x", "323": "y", "332": "rotation", "330": "scaleX", "331": "scaleY", "327": "modifyFrom", "336": "modifyTo", "334": "strength", "316": "unitsValue", "325": "typeValue", "326": "modeValue", "333": "clamp", "317": "falloffFrom", "318": "falloffTo", "319": "offset", "378": "runId", "356": "tag", "357": "featureValue", "272": "styleId", "268": "text", "586": "propertyKey", "587": "flags", "660": "converterId", "637": "propertyValue", "686": "propertyValue", "634": "propertyValue", "638": "propertyValue", "636": "propertyValue", "588": "sourcePathIds", "635": "propertyValue", "757": "interpolationType", "758": "interpolatorId", "756": "duration", "746": "trimType", "713": "interpolationType", "714": "interpolatorId", "715": "flags", "716": "minInput", "717": "maxInput", "718": "minOutput", "719": "maxOutput", "743": "length", "744": "text", "745": "padType", "669": "decimals", "711": "sourcePathIds", "682": "operationType", "764": "flags", "765": "decimals", "766": "colorFormat", "662": "name", "681": "operationValue", "679": "converterId", "775": "operationType", "776": "functionType", "777": "operationValue", "697": "initialWidth", "698": "initialHeight", "699": "width", "700": "height", "675": "offset", "676": "normalized", "498": "gapHorizontal", "499": "gapVertical", "500": "maxWidth", "501": "maxHeight", "502": "minWidth", "503": "minHeight", "504": "borderLeft", "505": "borderRight", "506": "borderTop", "507": "borderBottom", "508": "marginLeft", "509": "marginRight", "510": "marginTop", "511": "marginBottom", "512": "paddingLeft", "513": "paddingRight", "514": "paddingTop", "515": "paddingBottom", "516": "positionLeft", "517": "positionRight", "518": "positionTop", "519": "positionBottom", "520": "flex", "521": "flexGrow", "522": "flexShrink", "523": "flexBasis", "705": "flexBasisUnitsValue", "524": "aspectRatio", "655": "layoutWidthScaleType", "656": "layoutHeightScaleType", "632": "layoutAlignmentType", "589": "animationStyleType", "590": "interpolationType", "591": "interpolatorId", "592": "interpolationTime", "596": "displayValue", "597": "positionTypeValue", "598": "flexDirectionValue", "599": "directionValue", "600": "alignContentValue", "601": "alignItemsValue", "602": "alignSelfValue", "603": "justifyContentValue", "604": "flexWrapValue", "605": "overflowValue", "606": "intrinsicallySizedValue", "607": "widthUnitsValue", "608": "heightUnitsValue", "609": "borderLeftUnitsValue", "610": "borderRightUnitsValue", "611": "borderTopUnitsValue", "612": "borderBottomUnitsValue", "613": "marginLeftUnitsValue", "614": "marginRightUnitsValue", "615": "marginTopUnitsValue", "616": "marginBottomUnitsValue", "617": "paddingLeftUnitsValue", "618": "paddingRightUnitsValue", "619": "paddingTopUnitsValue", "620": "paddingBottomUnitsValue", "621": "positionLeftUnitsValue", "622": "positionRightUnitsValue", "623": "positionTopUnitsValue", "624": "positionBottomUnitsValue", "625": "gapHorizontalUnitsValue", "626": "gapVerticalUnitsValue", "627": "minWidthUnitsValue", "628": "minHeightUnitsValue", "629": "maxWidthUnitsValue", "630": "maxHeightUnitsValue", "639": "linkCornerRadius", "640": "cornerRadiusTL", "641": "cornerRadiusTR", "642": "cornerRadiusBL", "643": "cornerRadiusBR", "672": "patchIndex", "673": "style", "128": "pathFlags", "770": "isHole", "82": "rotation", "83": "distance", "127": "innerRadius", "215": "u", "216": "v", "206": "assetId", "380": "originX", "381": "originY", "84": "inRotation", "85": "inDistance", "86": "outRotation", "87": "outDistance", "24": "x", "25": "y", "32": "isClosed", "92": "sourceId", "93": "fillRule", "94": "isVisible", "20": "width", "21": "height", "123": "originX", "124": "originY", "781": "length", "223": "triangleIndexBytes", "79": "rotation", "80": "inDistance", "81": "outDistance", "164": "linkCornerRadius", "31": "cornerRadiusTL", "161": "cornerRadiusTR", "162": "cornerRadiusBL", "163": "cornerRadiusBR", "125": "points", "126": "cornerRadius", "26": "radius", "47": "thickness", "48": "cap", "49": "join", "50": "transformAffectsStroke", "692": "length", "693": "lengthIsPercentage", "40": "fillRule", "38": "colorValue", "39": "position", "41": "isVisible", "747": "blendModeValue", "37": "colorValue", "114": "start", "115": "end", "116": "offset", "117": "modeValue", "690": "offset", "691": "offsetIsPercentage", "42": "startX", "33": "startY", "34": "endX", "35": "endY", "46": "opacity", "748": "spaceValue", "749": "strength", "750": "offsetX", "751": "offsetY", "752": "inner", "195": "minMaxSpaceValue", "182": "copyFactor", "183": "minValue", "184": "maxValue", "188": "offset", "189": "doesCopy", "190": "min", "191": "max", "174": "invertDirection", "175": "parentBoneCount", "177": "distance", "178": "modeValue", "172": "strength", "173": "targetId", "372": "originX", "373": "originY", "179": "sourceSpaceValue", "180": "destSpaceValue", "722": "directionValue", "363": "distance", "364": "orient", "365": "offset", "185": "copyFactorY", "186": "minValueY", "187": "maxValueY", "192": "doesCopyY", "193": "minY", "194": "maxY", "728": "friction", "729": "speedMultiplier", "730": "elasticFactor", "731": "constraintId", "725": "scrollConstraintId", "734": "autoSize", "759": "scrollOffsetX", "760": "scrollOffsetY", "761": "scrollPercentX", "762": "scrollPercentY", "763": "scrollIndex", "724": "snap", "727": "physicsTypeValue", "726": "physicsId", "574": "enumId", "708": "enumType", "549": "viewModelId", "550": "viewModelInstanceId", "560": "propertyValue", "555": "propertyValue", "572": "name", "687": "propertyValue", "554": "viewModelPropertyId", "709": "enumType", "557": "name", "565": "viewModelReferenceId", "566": "viewModelId", "578": "key", "579": "value", "593": "propertyValue", "577": "propertyValue", "561": "propertyValue", "575": "propertyValue", "89": "length", "95": "boneId", "96": "xx", "97": "yx", "98": "xy", "99": "yy", "100": "tx", "101": "ty", "110": "inValues", "111": "inIndices", "112": "outValues", "113": "outIndices", "102": "values", "103": "indices", "104": "xx", "105": "yx", "106": "xy", "107": "yy", "108": "tx", "109": "ty", "90": "x", "91": "y", "207": "height", "208": "width", "212": "bytes", "530": "volume", "204": "assetId", "359": "cdnUuid", "362": "cdnBaseUrl", "203": "name"}};
+const TYPE_NAMES={};for(const[k,v]of Object.entries(SCHEMA.type_names))TYPE_NAMES[parseInt(k)]=v;
+const PROP_FIELDS={};for(const[k,v]of Object.entries(SCHEMA.property_fields))PROP_FIELDS[parseInt(k)]=v;
+const PROP_NAMES={};for(const[k,v]of Object.entries(SCHEMA.property_names))PROP_NAMES[parseInt(k)]=v;
+
+// ── .riv Binary Parser ──
+
+function readLeb128(buf, pos) {
+  let r = 0, s = 0;
+  while (pos < buf.length) {
+    const b = buf[pos++];
+    r |= (b & 0x7F) << s;
+    if ((b & 0x80) === 0) return [r >>> 0, pos]; // unsigned
+    s += 7;
+  }
+  throw new Error('LEB128 overflow');
+}
+
+function readString(buf, pos) {
+  const [len, p] = readLeb128(buf, pos);
+  return [new TextDecoder().decode(buf.slice(p, p + len)), p + len];
+}
+
+function readFloat32(buf, pos) {
+  return [new DataView(buf.buffer, buf.byteOffset).getFloat32(pos, true), pos + 4];
+}
+
+function readUint32(buf, pos) {
+  return [new DataView(buf.buffer, buf.byteOffset).getUint32(pos, true), pos + 4];
+}
+
+function readBytesVal(buf, pos) {
+  const [len, p] = readLeb128(buf, pos);
+  return [buf.slice(p, p + len), p + len];
+}
+
+function typeName(k) { return TYPE_NAMES[k] || 'UnknownType_' + k; }
+function propName(k) { return PROP_NAMES[k] || 'property_' + k; }
+function getFieldType(pk, toc) {
+  const ft = PROP_FIELDS[pk];
+  return ft !== undefined ? ft : (toc[pk] !== undefined ? toc[pk] : null);
+}
+
+function parseRiv(buf) {
+  const data = new Uint8Array(buf);
+  let pos = 0;
+  if (data[0]!==0x52||data[1]!==0x49||data[2]!==0x56||data[3]!==0x45) throw new Error('Not a RIVE file');
+  pos = 4;
+  let major, minor, fileId;
+  [major, pos] = readLeb128(data, pos);
+  [minor, pos] = readLeb128(data, pos);
+  [fileId, pos] = readLeb128(data, pos);
+
+  const pkeys = [];
+  while (true) {
+    let pk; [pk, pos] = readLeb128(data, pos);
+    if (pk === 0) break;
+    pkeys.push(pk);
+  }
+  const toc = {};
+  let ci = 0, cb = 8;
+  for (const pk of pkeys) {
+    if (cb === 8) { [ci, pos] = readUint32(data, pos); cb = 0; }
+    toc[pk] = (ci >> cb) & 3;
+    cb += 2;
+  }
+
+  const header = { majorVersion: major, minorVersion: minor, fileId, tocCount: pkeys.length };
+  const objects = [];
+
+  while (pos < data.length) {
+    const off = pos;
+    let ck; [ck, pos] = readLeb128(data, pos);
+    const props = [];
+    let err = null;
+    while (pos < data.length) {
+      let pk; [pk, pos] = readLeb128(data, pos);
+      if (pk === 0) break;
+      const ft = getFieldType(pk, toc);
+      if (ft === null) { err = 'unknown field type key=' + pk; break; }
+      try {
+        if (ft === 0) { let v; [v, pos] = readLeb128(data, pos); props.push({key:pk,type:ft,value:v}); }
+        else if (ft === 1) { let v; [v, pos] = readString(data, pos); props.push({key:pk,type:ft,value:v}); }
+        else if (ft === 2) { let v; [v, pos] = readFloat32(data, pos); props.push({key:pk,type:ft,value:v}); }
+        else if (ft === 3) { let v; [v, pos] = readUint32(data, pos); props.push({key:pk,type:ft,value:v}); }
+        else if (ft === 4) { let v; [v, pos] = readBytesVal(data, pos); props.push({key:pk,type:ft,value:Array.from(v).map(b=>b.toString(16).padStart(2,'0')).join(''),size:v.length}); }
+        else if (ft === 5) { const v = data[pos++]; props.push({key:pk,type:ft,value:v===1}); }
+      } catch(e) { err = e.message; break; }
+    }
+    const getProp = (name) => { for (const p of props) if (propName(p.key)===name) return p.value; return null; };
+    objects.push({
+      index: objects.length, offset: off, typeKey: ck,
+      typeName: typeName(ck), category: getCat(ck),
+      properties: props, error: err,
+      name: getProp('name') && typeof getProp('name')==='string' ? getProp('name') : null,
+      parentId: props.find(p=>propName(p.key)==='parentId'&&p.type===0)?.value ?? null,
+    });
+  }
+  return { header, objects, fileSize: data.length };
+}
+
+const CAT_MAP = {};
+const _CATS = {
+  structure:[23,1,2,10,11,38,91,13,147,92,93,95,96,97,98,409,420,451,452,513,559],
+  shape:[3,4,7,8,51,52,12,15,16,5,6,34,35,36,14,42,100,107,108,109,111,508],
+  paint:[20,24,18,22,17,19,47,21,506,507,533],
+  animation:[31,27,25,26,29,30,37,84,142,50,450,170,171,28,138,139,163,174,175],
+  statemachine:[53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,145,114,115,116,117,118,121,122,123,124,125,126,168,169,527,528],
+  image_asset:[105,104,100],font_asset:[141],audio_asset:[406,407,422],
+  asset:[99,102,103,106],
+  constraint:[79,80,81,82,83,85,86,87,88,89,90,165,520,521,522,523,524,525],
+  bone:[39,40,41,43,44,45,46],
+  text:[134,135,137,144,158,159,160,161,162,164,546,547],
+  viewmodel:[426,427,428,429,430,431,432,433,434,435,436,437,438,439,440,441,442,443,444,445,448,449,501,502,509,510,511,512],
+  databind:[9,446,447,471,472,473,474,475,488,489,490,498,499,500,503,504,514,515,516,517,519,530,531,532,534,535,536,537,538,539,540,541,542,543,544,545],
+};
+for (const [cat, keys] of Object.entries(_CATS)) for (const k of keys) CAT_MAP[k] = cat;
+function getCat(tk) { return CAT_MAP[tk] || 'other'; }
+
+const CAT_COLORS = {
+  structure:'#4a9eff',shape:'#ff6b6b',paint:'#ffa94d',animation:'#69db7c',
+  statemachine:'#da77f2',image_asset:'#e599f7',font_asset:'#66d9e8',audio_asset:'#ffd43b',
+  asset:'#868e96',constraint:'#f06595',bone:'#e8590c',text:'#20c997',
+  viewmodel:'#748ffc',databind:'#c0eb75',other:'#adb5bd',
+};
+
+// Property descriptions for tooltips
+const PROP_DESCS = {
+  4:"Component name",5:"Parent component index (Artboard=0)",
+  7:"Artboard/Layout width",8:"Artboard/Layout height",
+  13:"Local X position",14:"Local Y position",15:"Rotation (radians)",
+  16:"Scale X (1.0=100%)",17:"Scale Y (1.0=100%)",18:"Opacity (0~1)",
+  20:"Path width",21:"Path height",23:"Blend mode",
+  37:"SolidColor ARGB",38:"GradientStop/KeyFrame ARGB",39:"Gradient position (0~1)",
+  47:"Stroke thickness",48:"Stroke cap",49:"Stroke join",
+  51:"KeyedObject: animated component index",53:"KeyedProperty: animated property key",
+  56:"Animation FPS",57:"Animation duration (frames)",58:"Playback speed",
+  59:"Loop: 0=oneShot,1=loop,2=pingPong",67:"Keyframe position (frames)",
+  68:"Interpolation: 0=hold,1=linear,2=cubic",70:"Keyframe float value",
+  149:"Animation index in Artboard",151:"Target state index",155:"Input index",
+  160:"Exit time (frames)",224:"Listener target index",225:"Listener type",236:"Default StateMachine index",
+};
+function propDesc(k){return PROP_DESCS[k]||''}
+
+// ── Tree Builder ──
+
+const STACK_CHILDREN = {
+  23: new Set([1,105,141,406,102]),
+  1: new Set([31,53,25,26]),
+  31: new Set([25]), 25: new Set([26]),
+  26: new Set([30,37,84,142,50,450,170,171,29]),
+  53: new Set([57,56,58,59,114]),
+  57: new Set([60,61,62,63,64,73,76,527,528,145]),
+  61: new Set([65,78]), 62: new Set([65,78]), 63: new Set([65,78]),
+  73: new Set([65,78]), 76: new Set([65,78]),
+  65: new Set([67,68,69,70,71,482,497]),
+  78: new Set([67,68,69,70,71,482,497]),
+  114: new Set([115,116,117,118,125,126,168,487]),
+  105: new Set([106]), 141: new Set([106]), 406: new Set([106]),
+  102: new Set([105,141,406]),
+};
+const VM_PROP_TYPES = new Set([430,431,434,436,439,440,443,448,502,509,511]);
+const VM_INST_VAL_TYPES = new Set([426,428,432,433,441,442,444,449,501]);
+
+function buildTree(objects) {
+  const nodes = objects.map(o => ({obj:o, children:[]}));
+  const abRanges = [];
+  for (let i = 0; i < objects.length; i++)
+    if (objects[i].typeName === 'Artboard') abRanges.push([i, i+1, objects.length]);
+  for (let j = 0; j < abRanges.length-1; j++) abRanges[j][2] = abRanges[j+1][0];
+
+  for (const [abIdx, start, end] of abRanges) {
+    const comp = {0: nodes[abIdx]};
+    let cc = 1, compEnd = start;
+    for (let i = start; i < end; i++) {
+      if (objects[i].parentId !== null) { comp[cc++] = nodes[i]; compEnd = i+1; }
+      else break;
+    }
+    for (const [cidx, node] of Object.entries(comp)) {
+      if (+cidx === 0) continue;
+      const pid = node.obj.parentId;
+      (comp[pid] || nodes[abIdx]).children.push(node);
+    }
+    let i = compEnd;
+    let stack = [nodes[abIdx]];
+    while (i < end) {
+      const tk = objects[i].typeKey;
+      let placed = false;
+      for (let d = stack.length-1; d >= 0; d--) {
+        const allowed = STACK_CHILDREN[stack[d].obj.typeKey];
+        if (allowed && allowed.has(tk)) {
+          stack[d].children.push(nodes[i]);
+          stack = stack.slice(0, d+1);
+          stack.push(nodes[i]);
+          placed = true; break;
+        }
+      }
+      if (!placed) { nodes[abIdx].children.push(nodes[i]); stack = [nodes[abIdx], nodes[i]]; }
+      i++;
+    }
+  }
+
+  const roots = [];
+  let backboard = null, bbIdx = null;
+  for (let i = 0; i < objects.length; i++) {
+    if (objects[i].typeName === 'Backboard') { backboard = nodes[i]; bbIdx = i; roots.push(backboard); break; }
+  }
+  if (backboard) {
+    for (const [abIdx] of abRanges) backboard.children.push(nodes[abIdx]);
+    // Assets between backboard and first artboard/viewmodel
+    let firstSpecial = objects.length;
+    if (abRanges.length) firstSpecial = abRanges[0][0];
+    for (let i = 0; i < objects.length; i++) {
+      if ((objects[i].typeName==='ViewModel'||objects[i].typeName==='Artboard') && i > bbIdx) { firstSpecial = Math.min(firstSpecial, i); break; }
+    }
+    let stk = [backboard];
+    for (let i = bbIdx+1; i < firstSpecial; i++) {
+      const tk = objects[i].typeKey;
+      let placed = false;
+      for (let d = stk.length-1; d >= 0; d--) {
+        const allowed = STACK_CHILDREN[stk[d].obj.typeKey];
+        if (allowed && allowed.has(tk)) { stk[d].children.push(nodes[i]); stk = stk.slice(0,d+1); stk.push(nodes[i]); placed=true; break; }
+      }
+      if (!placed) { backboard.children.push(nodes[i]); stk = [backboard, nodes[i]]; }
+    }
+  }
+
+  // ViewModel tree
+  const attached = new Set();
+  function mark(n) { attached.add(n.obj.index); n.children.forEach(mark); }
+  roots.forEach(mark);
+  let vmStack = [];
+  for (const n of nodes) {
+    if (attached.has(n.obj.index)) continue;
+    const tk = n.obj.typeKey;
+    if (tk === 435) { vmStack = [n]; roots.push(n); attached.add(n.obj.index); if(backboard)backboard.children.push(n); }
+    else if (VM_PROP_TYPES.has(tk) && vmStack.length) { vmStack[0].children.push(n); attached.add(n.obj.index); }
+    else if (tk === 437 && vmStack.length) { vmStack[0].children.push(n); vmStack = [vmStack[0], n]; attached.add(n.obj.index); }
+    else if (VM_INST_VAL_TYPES.has(tk) && vmStack.length >= 2) { vmStack[1].children.push(n); attached.add(n.obj.index); }
+    else if (n.obj.parentId !== null && vmStack.length >= 2) {
+      if (n.obj.properties.some(p => propName(p.key)==='viewModelPropertyId')) { vmStack[1].children.push(n); attached.add(n.obj.index); }
+    }
+  }
+  for (const n of nodes) if (!attached.has(n.obj.index)) roots.push(n);
+  return roots;
+}
+
+// Cross-reference resolver
+function resolveRefs(objects, tree) {
+  const abCompMaps = {};
+  let curAb = null, cc = 0;
+  for (const o of objects) {
+    if (o.typeName === 'Artboard') { curAb = o.index; abCompMaps[curAb] = {0: o}; cc = 1; }
+    else if (curAb !== null && o.parentId !== null) { abCompMaps[curAb][cc++] = o; }
+    else if (curAb !== null && o.parentId === null && o.typeName !== 'Artboard') {}
+  }
+  const objToAb = {};
+  curAb = null;
+  for (const o of objects) { if (o.typeName==='Artboard') curAb=o.index; if (curAb!==null) objToAb[o.index]=curAb; }
+
+  for (const o of objects) {
+    const refs = {}, links = {};
+    for (const p of o.properties) {
+      const pn = propName(p.key);
+      if (pn === 'objectId' && p.type === 0) {
+        const ab = objToAb[o.index];
+        if (ab !== undefined) {
+          const t = (abCompMaps[ab]||{})[p.value];
+          if (t) { let l = '#'+t.index+' '+t.typeName; if(t.name)l+=' "'+t.name+'"'; refs[p.key]=l; links[p.key]=t.index; }
+        }
+      }
+      if (pn === 'propertyKey' && p.type === 0) refs[p.key] = propName(p.value);
+      if (pn === 'animationId' && p.type === 0) {
+        const ab = objToAb[o.index];
+        if (ab !== undefined) {
+          let ai = 0;
+          for (const o2 of objects) {
+            if (o2.typeName === 'LinearAnimation' && objToAb[o2.index] === ab) {
+              if (ai === p.value) { refs[p.key] = '#'+o2.index+' "'+(o2.name||'anim')+'"'; links[p.key]=o2.index; break; }
+              ai++;
+            }
+          }
+        }
+      }
+    }
+    o._refs = refs; o._refLinks = links;
+  }
+}
+
+function fmtVal(p, refs) {
+  if (refs && refs[p.key] !== undefined) {
+    const ref = refs[p.key];
+    return p.type === 0 ? ref + ' (' + p.value + ')' : ref;
+  }
+  if (p.type===0) return String(p.value);
+  if (p.type===1) return '"'+p.value+'"';
+  if (p.type===2) return String(p.value);
+  if (p.type===3) return '#'+(p.value>>>0).toString(16).padStart(8,'0').toUpperCase();
+  if (p.type===4) return 'bytes['+p.size+']';
+  if (p.type===5) return p.value?'true':'false';
+  return String(p.value);
+}
+
+// ── Stats Computation ──
+
+function computeStats(header, objects, tree, fileSize) {
+  const gp = (o, name) => { for (const p of o.properties) if (propName(p.key)===name) return p.value; return null; };
+  const countType = (...names) => objects.filter(o => names.includes(o.typeName)).length;
+
+  // Assets
+  let assetBytes=0, assetCount=0;
+  for (const o of objects) if (o.typeName==='FileAssetContents') for (const p of o.properties) if (propName(p.key)==='bytes'&&p.type===4) { assetBytes+=p.size||0; assetCount++; }
+
+  const artboards = objects.filter(o=>o.typeName==='Artboard').map(o=>({name:o.name||'unnamed',width:gp(o,'width')||0,height:gp(o,'height')||0}));
+
+  // Per-shape analysis
+  const pathParam = new Set(['Ellipse','Rectangle','Triangle','Polygon','Star']);
+  const pathFree = new Set(['PointsPath']);
+  const vtxTypes = new Set(['StraightVertex','CubicDetachedVertex','CubicAsymmetricVertex','CubicMirroredVertex']);
+
+  // Parent map for name resolution
+  const parentMap = {};
+  function buildPM(n, p) { parentMap[n.obj.index]=p; n.children.forEach(c=>buildPM(c,n)); }
+  tree.forEach(r=>buildPM(r,null));
+  function resolveName(node) {
+    if (node.obj.name) return node.obj.name;
+    let idx = node.obj.index;
+    while (parentMap[idx]) { const p=parentMap[idx]; if(p.obj.name) return p.obj.name+'/'+node.obj.typeName; idx=p.obj.index; }
+    return '';
+  }
+
+  const shapeCosts = [];
+  let artboardFills = 0;
+
+  function analyzeShape(node) {
+    const o = node.obj;
+    let clips=0, verts=0, renderPts=0, meshes=0, bones=0, images=0;
+    const paths=[], paints=[];
+    for (const c of node.children) {
+      const tn = c.obj.typeName;
+      if (tn==='Fill'||tn==='Stroke') {
+        let colorType='Solid', stops=0;
+        for (const gc of c.children) {
+          const gtn=gc.obj.typeName;
+          if (gtn==='SolidColor') colorType='Solid';
+          else if (gtn==='LinearGradient') { colorType='Linear'; stops=gc.children.filter(x=>x.obj.typeName==='GradientStop').length; }
+          else if (gtn==='RadialGradient') { colorType='Radial'; stops=gc.children.filter(x=>x.obj.typeName==='GradientStop').length; }
+        }
+        paints.push({paint:tn,color:colorType,stops});
+      } else if (tn==='ClippingShape') clips++;
+      else if (pathParam.has(tn)) {
+        let cv=4, rp=4;
+        if (tn==='Ellipse') { cv=4; rp=13; }
+        else if (tn==='Triangle') { cv=3; rp=3; }
+        else if (tn==='Polygon') { const n=gp(c.obj,'points')||5; cv=n; rp=n; }
+        else if (tn==='Star') { const n=(gp(c.obj,'points')||5)*2; cv=n; rp=n; }
+        paths.push({type:tn,mode:'param',vertices:cv,renderPts:rp}); verts+=cv; renderPts+=rp;
+      } else if (pathFree.has(tn)) {
+        let vc=0, rp=1;
+        for (const vc2 of c.children) { const vtn=vc2.obj.typeName; if(vtxTypes.has(vtn)){vc++;rp+=vtn.includes('Cubic')?3:1;} }
+        paths.push({type:tn,mode:'free',vertices:vc,renderPts:rp}); verts+=vc; renderPts+=rp;
+      } else if (tn==='Mesh') meshes++;
+      else if (tn==='Image') images++;
+    }
+    function cntBones(n) { let b=0; for(const c of n.children){if(c.obj.typeName==='Bone'||c.obj.typeName==='RootBone')b++;b+=cntBones(c);}return b; }
+    bones = cntBones(node);
+    return {index:o.index,name:resolveName(node),draws:paints.length,clips,paths,vertices:verts,renderPoints:renderPts,colors:paints.map(p=>p.color),meshes,bones,images,paints};
+  }
+
+  function walkShapes(node) {
+    if (node.obj.typeName==='Shape') { shapeCosts.push(analyzeShape(node)); return; }
+    if (node.obj.typeName==='Artboard') for (const c of node.children) if(c.obj.typeName==='Fill') artboardFills++;
+    node.children.forEach(walkShapes);
+  }
+  tree.forEach(walkShapes);
+
+  let standImg=0,standMesh=0,standBone=0;
+  function walkStandalone(n){const tn=n.obj.typeName;if(tn==='Shape')return;if(tn==='Image')standImg++;if(tn==='Mesh')standMesh++;if(tn==='Bone'||tn==='RootBone')standBone++;n.children.forEach(walkStandalone);}
+  tree.forEach(walkStandalone);
+
+  shapeCosts.sort((a,b)=>(b.draws+b.clips*2)-(a.draws+a.clips*2));
+  const totalDraws=shapeCosts.reduce((s,c)=>s+c.draws,0)+artboardFills;
+  const totalClips=shapeCosts.reduce((s,c)=>s+c.clips,0);
+  const totalMeshes=shapeCosts.reduce((s,c)=>s+c.meshes,0)+standMesh;
+  const totalBones=shapeCosts.reduce((s,c)=>s+c.bones,0)+standBone;
+  const totalImages=shapeCosts.reduce((s,c)=>s+c.images,0)+standImg;
+  const drawDist={};shapeCosts.forEach(s=>{drawDist[s.draws]=(drawDist[s.draws]||0)+1;});
+
+  // Render detail
+  const paintBD={},paintVT={},paintRP={};
+  let totalPathCount=0,totalPathVerts=0,totalRenderPts=0,totalGradStops=0;
+  for(const sc of shapeCosts){totalPathCount+=sc.paths.length;totalPathVerts+=sc.vertices;totalRenderPts+=sc.renderPoints;for(const p of sc.paints){const k=p.paint+'+'+p.color;paintBD[k]=(paintBD[k]||0)+1;paintVT[k]=(paintVT[k]||0)+sc.vertices;paintRP[k]=(paintRP[k]||0)+sc.renderPoints;totalGradStops+=p.stops;}}
+  totalPathCount+=artboardFills;totalRenderPts+=artboardFills*4;
+
+  // Image detail
+  const assetList=[];
+  for(const o of objects)if(o.typeName==='ImageAsset')assetList.push({name:o.name||'unnamed',width:gp(o,'width')||0,height:gp(o,'height')||0});
+  const imageDraws=[];
+  for(const o of objects)if(o.typeName==='Image'){const ref=gp(o,'assetId');const ai=ref!==null&&ref<assetList.length?assetList[ref]:{};imageDraws.push({name:o.name||ai.name||'unnamed',width:ai.width||0,height:ai.height||0,index:o.index,hasMesh:false});}
+  // Check mesh
+  function findNode(nodes,idx){for(const n of nodes){if(n.obj.index===idx)return n;const r=findNode(n.children,idx);if(r)return r;}return null;}
+  for(const img of imageDraws){const nd=findNode(tree,img.index);if(nd)img.hasMesh=nd.children.some(c=>c.obj.typeName==='Mesh');}
+
+  const meshVerts=countType('MeshVertex','ContourMeshVertex');
+
+  // Animation analysis
+  const pathProps=new Set([20,21,24,25,26,31,79,80,81,82,83,84,85,86,87,110,125,126,127,161,162,163]);
+  const abCompMaps={};let cAb=null,ccc=0;
+  for(const o of objects){if(o.typeName==='Artboard'){cAb=o.index;abCompMaps[cAb]={0:o};ccc=1;}else if(cAb!==null&&o.parentId!==null){abCompMaps[cAb][ccc++]=o;}}
+  const objToAb={};cAb=null;for(const o of objects){if(o.typeName==='Artboard')cAb=o.index;if(cAb!==null)objToAb[o.index]=cAb;}
+
+  const animAnalysis=[];
+  for(const o of objects){
+    if(o.typeName!=='LinearAnimation')continue;
+    const fps=gp(o,'fps')||60,dur=gp(o,'duration')||0,loop={0:'oneShot',1:'loop',2:'pingPong'}[gp(o,'loopValue')||0]||'?';
+    let propsTotal=0;const pathRecalcs=[];
+    const aNode=findNode(tree,o.index);
+    if(aNode)for(const ko of aNode.children){
+      if(ko.obj.typeName!=='KeyedObject')continue;
+      const oid=gp(ko.obj,'objectId');const ab=Object.keys(abCompMaps)[0];
+      const target=ab!==undefined?(abCompMaps[ab]||{})[oid]:null;
+      let tName='';if(target){tName='#'+target.index+' '+target.typeName;if(target.name)tName+=' "'+target.name+'"';}
+      for(const kp of ko.children){
+        if(kp.obj.typeName!=='KeyedProperty')continue;
+        const pk=gp(kp.obj,'propertyKey');propsTotal++;
+        if(pk!==null&&pathProps.has(pk))pathRecalcs.push({target:tName,prop:propName(pk)});
+      }
+    }
+    animAnalysis.push({name:o.name||'unnamed',fps,duration:dur,loop,propsPerFrame:propsTotal,pathRecalcs});
+  }
+
+  // State machine
+  const smData={count:countType('StateMachine'),layers:countType('StateMachineLayer'),states:countType('AnimationState','EntryState','ExitState','AnyState','BlendStateDirect','BlendState1DInput','BlendState1DViewModel'),transitions:countType('StateTransition','BlendStateTransition'),conditions:countType('TransitionTriggerCondition','TransitionNumberCondition','TransitionBoolCondition','TransitionViewModelCondition','TransitionArtboardCondition'),inputs:countType('StateMachineNumber','StateMachineBool','StateMachineTrigger'),listeners:countType('StateMachineListener')};
+
+  let maxDepth=0;function walkD(n,d){if(d>maxDepth)maxDepth=d;n.children.forEach(c=>walkD(c,d+1));}tree.forEach(r=>walkD(r,0));
+  const catCounts={};for(const o of objects)catCounts[o.category]=(catCounts[o.category]||0)+1;
+
+  const warnings=[];
+  if(totalPathVerts>500)warnings.push('顶点数较多 ('+totalPathVerts+')');
+  if(totalDraws>50)warnings.push('Draw calls 较多 ('+totalDraws+'/帧)');
+  if(totalClips>10)warnings.push('裁剪较多 ('+totalClips+')');
+  if(totalMeshes>20)warnings.push('Mesh 较多 ('+totalMeshes+')');
+  if(assetBytes>1048576)warnings.push('内嵌资源较大 ('+(assetBytes/1048576).toFixed(1)+'MB)');
+  if(animAnalysis.some(a=>a.pathRecalcs.length))warnings.push('存在动画触发路径重算');
+  const score=Math.min(5,1+(totalDraws>20?1:0)+(totalDraws>50?1:0)+(totalClips>5?1:0)+(totalMeshes>10?1:0)+(animAnalysis.some(a=>a.pathRecalcs.length)?1:0));
+
+  return {
+    file:{size:fileSize,objects:objects.length,assetBytes,assetCount},artboards,
+    shapeCosts:shapeCosts.slice(0,20),shapeTotal:shapeCosts.length,
+    renderDetail:{drawPath:totalDraws,clipPath:totalClips,drawImage:totalImages,drawImageMesh:totalMeshes,totalCalls:totalDraws+totalClips+totalImages+totalMeshes,totalPaths:totalPathCount,totalVertices:totalPathVerts,totalRenderPoints:totalRenderPts,totalGradientStops:totalGradStops,paintBreakdown:paintBD,paintVertices:paintVT,paintRenderPts:paintRP},
+    imageDetail:imageDraws,meshDetail:{count:totalMeshes,meshVertices:meshVerts,textures:assetList},
+    summary:{totalDraws,totalClips,totalMeshes,totalBones,totalImages,artboardFills,drawDist,score},
+    animAnalysis,stateMachine:smData,hierarchy:{maxDepth},distribution:catCounts,warnings,
+  };
+}
+
+// ── Graph View (Canvas) ──
+
+let gNodes=[], gEdges=[], gZoom=1, gCamX=0, gCamY=0, gSel=null, gDragNode=null, gDragging=false, gDragX=0, gDragY=0, gDidDrag=false;
+let gShowLinks=false, gLinkedSet=new Set();
+const GR=14, GX=44, GY=64;
+let gCollapsed=new Set(), gFocusRoot=null, gTree=[], gAllNodes={};
+
+function gLayout() {
+  gNodes=[]; gEdges=[];
+  const roots = gFocusRoot ? [gFocusRoot] : gTree;
+  function measure(n,d){n._d=d;const kids=gCollapsed.has(n.obj.index)?[]:n.children;if(!kids.length){n._w=1;n._leaf=true}else{n._w=0;n._leaf=false;kids.forEach(c=>{measure(c,d+1);n._w+=c._w})}}
+  function position(n,xs){const y=n._d*GY+GR+30;const kids=gCollapsed.has(n.obj.index)?[]:n.children;if(!kids.length){n._x=xs*GX+GR+30;n._y=y;gNodes.push(n);return xs+1}let cur=xs;kids.forEach(c=>{cur=position(c,cur);gEdges.push({from:n,to:c})});n._x=(kids[0]._x+kids[kids.length-1]._x)/2;n._y=y;gNodes.push(n);return cur}
+  let cur=0;roots.forEach(r=>{measure(r,0);cur=position(r,cur)});
+}
+
+function gDraw() {
+  const cv=document.getElementById('gcanvas');if(!cv)return;
+  const panel=document.querySelector('.gpanel');
+  const W=cv.parentElement.clientWidth-(panel?320:0),H=cv.parentElement.clientHeight;
+  cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;cv.style.width=W+'px';cv.style.height=H+'px';
+  const c=cv.getContext('2d');c.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  c.clearRect(0,0,W,H);c.save();c.translate(W/2,H/2);c.scale(gZoom,gZoom);c.translate(-gCamX,-gCamY);
+  // Edges
+  c.strokeStyle='#3b4261';c.lineWidth=1.2/gZoom;
+  for(const e of gEdges){const my=(e.from._y+e.to._y)/2;c.beginPath();c.moveTo(e.from._x,e.from._y+GR);c.bezierCurveTo(e.from._x,my,e.to._x,my,e.to._x,e.to._y-GR);c.stroke()}
+  // Nodes
+  const fs=Math.max(9,Math.min(12,11/gZoom));c.textAlign='center';c.textBaseline='top';
+  for(const nd of gNodes){
+    const col=CAT_COLORS[nd.obj.category]||CAT_COLORS.other;
+    const isSel=gSel&&gSel.obj.index===nd.obj.index;
+    const isLinked=gShowLinks&&gLinkedSet.has(nd.obj.index);
+    if(isLinked){c.beginPath();c.arc(nd._x,nd._y,GR+5/gZoom,0,Math.PI*2);c.strokeStyle='#ff9e64';c.lineWidth=2.5/gZoom;c.setLineDash([]);c.stroke()}
+    c.beginPath();c.arc(nd._x,nd._y,GR,0,Math.PI*2);c.fillStyle=isSel?'#fff':isLinked?'#ff9e64':col;c.fill();
+    if(isSel){c.strokeStyle=col;c.lineWidth=3/gZoom;c.setLineDash([]);c.stroke()}
+    c.font=fs+'px -apple-system,sans-serif';c.fillStyle=isSel?'#fff':isLinked?'#ff9e64':'#c0caf5';c.fillText(nd.obj.name||nd.obj.typeName,nd._x,nd._y+GR+4);
+    if(nd.children.length){const bs=5/Math.max(gZoom,.3);c.fillStyle='#3b4261';c.beginPath();c.arc(nd._x,nd._y+GR,bs+1,0,Math.PI*2);c.fill();c.strokeStyle='#9aa5ce';c.lineWidth=1.2/gZoom;c.beginPath();c.moveTo(nd._x-bs*.6,nd._y+GR);c.lineTo(nd._x+bs*.6,nd._y+GR);c.stroke();if(gCollapsed.has(nd.obj.index)){c.beginPath();c.moveTo(nd._x,nd._y+GR-bs*.6);c.lineTo(nd._x,nd._y+GR+bs*.6);c.stroke()}}
+  }
+  // Dashed links
+  if(gShowLinks&&gSel&&gLinkedSet.size){c.strokeStyle='#ff9e64';c.lineWidth=2/gZoom;c.setLineDash([6/gZoom,4/gZoom]);for(const nd of gNodes){if(!gLinkedSet.has(nd.obj.index))continue;c.beginPath();c.moveTo(gSel._x,gSel._y);c.lineTo(nd._x,nd._y);c.stroke()}c.setLineDash([])}
+  c.restore();
+  // Legend
+  gDrawLegend(c,W,H);
+}
+
+function gDrawLegend(c,W,H){
+  const cats=Object.entries(CAT_COLORS);const lx=10,ly=H-cats.length*16-10;
+  c.font='10px -apple-system,sans-serif';c.textAlign='left';c.textBaseline='middle';
+  cats.forEach(([cat,col],i)=>{const y=ly+i*16;c.fillStyle=col;c.beginPath();c.arc(lx+5,y,4,0,Math.PI*2);c.fill();c.fillStyle='#9aa5ce';c.fillText(cat,lx+14,y)});
+}
+
+function gHitTest(sx,sy){const cv=document.getElementById('gcanvas');const W=cv.clientWidth,H=cv.clientHeight;const wx=(sx-W/2)/gZoom+gCamX,wy=(sy-H/2)/gZoom+gCamY;let best=null,bd=GR*1.8;for(const n of gNodes){const d=Math.sqrt((n._x-wx)**2+(n._y-wy)**2);if(d<bd){bd=d;best=n}}return best}
+function gFit(){if(!gNodes.length)return;let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const n of gNodes){if(n._x<x0)x0=n._x;if(n._y<y0)y0=n._y;if(n._x>x1)x1=n._x;if(n._y>y1)y1=n._y}const cv=document.getElementById('gcanvas');const W=cv.clientWidth,H=cv.clientHeight;gCamX=(x0+x1)/2;gCamY=(y0+y1)/2;gZoom=Math.min(W/(x1-x0+200),H/(y1-y0+100),2);gDraw()}
+
+function gSelectNode(nd){
+  gSel=nd;gLinkedSet.clear();
+  if(nd){for(const p of nd.obj.properties){const lk=(nd.obj._refLinks||{})[p.key];if(lk!==undefined)gLinkedSet.add(lk)}}
+}
+
+function gShowPanel(nd){
+  const panel=document.querySelector('.gpanel');if(!panel)return;
+  if(!nd){panel.innerHTML='<p style="color:#565f89;padding:20px">'+t('clickNode')+'</p>';return}
+  const o=nd.obj,col=CAT_COLORS[o.category]||CAT_COLORS.other,refs=o._refs||{},links=o._refLinks||{};
+  let h='<h3>Object</h3>';
+  h+='<div class="strow"><span class="sk">Type</span><span class="sv" style="color:'+col+'">'+esc(o.typeName)+'</span></div>';
+  if(o.name)h+='<div class="strow"><span class="sk">Name</span><span class="sv">'+esc(o.name)+'</span></div>';
+  h+='<div class="strow"><span class="sk">Index</span><span class="sv">#'+o.index+'</span></div>';
+  h+='<div class="strow"><span class="sk">TypeKey</span><span class="sv">'+o.typeKey+'</span></div>';
+  h+='<div class="strow"><span class="sk">Offset</span><span class="sv">'+o.offset+'</span></div>';
+  h+='<div class="strow"><span class="sk">Category</span><span class="sv">'+esc(o.category)+'</span></div>';
+  h+='<div class="strow"><span class="sk">Children</span><span class="sv">'+nd.children.length+'</span></div>';
+  if(o.properties.length){
+    h+='<h3 style="margin-top:10px">Properties ('+o.properties.length+')</h3>';
+    h+='<input type="text" class="search" style="width:100%;margin-bottom:4px" placeholder="'+t('filterProps')+'" oninput="gFilterProps(this.value)">';
+    h+='<div id="gprops">';
+    h+=gRenderProps(o,refs,links,'');
+    h+='</div>';
+  }
+  panel.innerHTML=h;
+}
+
+function gRenderProps(o,refs,links,filter){
+  let h='';const fl=filter.toLowerCase();
+  for(const p of o.properties){
+    const pn=propName(p.key);
+    if(fl&&!(pn+' '+fmtVal(p,refs)+' '+p.key).toLowerCase().includes(fl))continue;
+    const vc=p.type===1?'s':p.type===5?'b':p.type===3?'c':'n';
+    let val=esc(fmtVal(p,refs));
+    if(links[p.key]!==undefined)val='<a href="#" onclick="gNavTo('+links[p.key]+');return false" style="color:#7aa2f7;text-decoration:underline">'+val+'</a>';
+    if(p.type===3){const v=p.value>>>0;const a=(v>>24&0xff)/255,r=v>>16&0xff,g=v>>8&0xff,b=v&0xff;val='<span class="csw" style="background:rgba('+r+','+g+','+b+','+a.toFixed(2)+')"></span>'+val}
+    const desc=propDesc(p.key);
+    const tip=desc?'<span style="display:inline-block;width:13px;height:13px;line-height:13px;text-align:center;border-radius:50%;background:#3b4261;color:#9aa5ce;font-size:9px;cursor:help;margin-left:3px;vertical-align:middle" title="'+esc(desc)+'">?</span>':'';
+    h+='<div class="tprop"><span class="tpk">'+esc(pn)+' <span style="color:#3b4261;font-size:10px">key='+p.key+'</span>'+tip+'</span><span class="tpv '+vc+'">'+val+'</span></div>';
+  }
+  return h;
+}
+window.gFilterProps=function(v){if(!gSel)return;const el=document.getElementById('gprops');if(el)el.innerHTML=gRenderProps(gSel.obj,gSel.obj._refs||{},gSel.obj._refLinks||{},v)};
+
+function gNavTo(idx){const nd=gNodes.find(n=>n.obj.index===idx);if(!nd)return;gSelectNode(nd);gCamX=nd._x;gCamY=nd._y;gZoom=Math.max(gZoom,1);gDraw();gShowPanel(nd)}
+
+// Toolbar actions
+function gGoRoot(){gCollapsed.clear();gFocusRoot=null;gLayout();gUpdateBreadcrumb();const root=gNodes.find(n=>n.obj.typeName==='Backboard')||gNodes[0];if(root){gSelectNode(root);gCamX=root._x;gCamY=root._y;gZoom=1.5;gDraw();gShowPanel(root)}}
+function gGoArtboard(){gCollapsed.clear();gFocusRoot=null;function walk(n){if(n.obj.typeName==='Artboard'||n.obj.typeName==='ViewModel')gCollapsed.add(n.obj.index);n.children.forEach(walk)}gTree.forEach(walk);gLayout();gUpdateBreadcrumb();gFit()}
+function gShowTypeOverview(tn){gCollapsed.clear();gFocusRoot=null;function colAll(n){if(n.children.length)gCollapsed.add(n.obj.index);n.children.forEach(colAll)}gTree.forEach(colAll);function uncol(n,anc){if(n.obj.typeName===tn){anc.forEach(a=>gCollapsed.delete(a.obj.index));gCollapsed.add(n.obj.index)}n.children.forEach(c=>uncol(c,[...anc,n]))}gTree.forEach(r=>uncol(r,[]));gLayout();gUpdateBreadcrumb();gFit()}
+function gFocusOn(nd){gFocusRoot=nd;gLayout();gUpdateBreadcrumb();gFit()}
+function gResetFocus(){gFocusRoot=null;gLayout();gUpdateBreadcrumb();gFit()}
+
+function gUpdateBreadcrumb(){
+  const el=document.getElementById('gbreadcrumb');if(!el)return;
+  if(!gFocusRoot){el.innerHTML='';return}
+  const path=[];
+  function findPath(n,t){if(n.obj.index===t.obj.index){path.push(n);return true}for(const c of n.children)if(findPath(c,t)){path.unshift(n);return true}return false}
+  for(const r of gTree)if(findPath(r,gFocusRoot))break;
+  let h='<span class="gbtn" onclick="gResetFocus()">All</span>';
+  for(const n of path)h+=' › <span class="gbtn" onclick="gFocusOn(gAllNodes['+n.obj.index+'])">'+esc(n.obj.name||n.obj.typeName)+'</span>';
+  el.innerHTML=h;
+}
+
+// Context menu
+let gCtxNode=null;
+function gShowCtx(e,nd){
+  const menu=document.getElementById('gctx');if(!menu)return;
+  gCtxNode=nd;menu.style.display='block';menu.style.left=e.clientX+'px';menu.style.top=e.clientY+'px';
+  document.getElementById('gctxFocus').style.display=nd.children.length?'':'none';
+  document.getElementById('gctxExpand').style.display=nd.children.length?'':'none';
+  document.getElementById('gctxCollapse').style.display=nd.children.length?'':'none';
+}
+function gHideCtx(){const m=document.getElementById('gctx');if(m)m.style.display='none'}
+window.gCtxAction=function(action){
+  if(action==='focus'&&gCtxNode)gFocusOn(gCtxNode);
+  if(action==='expand'&&gCtxNode){gCollapsed.delete(gCtxNode.obj.index);gLayout();gFit()}
+  if(action==='collapse'&&gCtxNode){gCollapsed.add(gCtxNode.obj.index);gLayout();gFit()}
+  if(action==='reset'){gCollapsed.clear();gResetFocus()}
+  gHideCtx();
+};
+
+// Schema modal
+function gShowSchema(){
+  const modal=document.getElementById('gschema');if(!modal)return;
+  modal.style.display='flex';gRenderSchema('types','');
+}
+function gRenderSchema(tab,q){
+  const body=document.getElementById('gschemaBody');if(!body)return;
+  const src=tab==='types'?TYPE_NAMES:PROP_NAMES;const ql=q.toLowerCase();
+  let h='';for(const[k,v]of Object.entries(src).sort((a,b)=>parseInt(a[0])-parseInt(b[0]))){
+    if(ql&&!String(k).includes(ql)&&!v.toLowerCase().includes(ql))continue;
+    h+='<div class="strow"><span class="sk" style="color:#ff9e64">'+k+'</span><span class="sv">'+esc(v)+'</span></div>';
+  }
+  body.innerHTML=h||'<div style="color:#565f89;padding:20px;text-align:center">No match</div>';
+}
+
+function initGraph(tree){
+  gTree=tree;gAllNodes={};function idx(n){gAllNodes[n.obj.index]=n;n.children.forEach(idx)}tree.forEach(idx);
+  gCollapsed.clear();gFocusRoot=null;
+  let total=0;function cnt(n){total++;n.children.forEach(cnt)}tree.forEach(cnt);
+  if(total>30){function walk(n){if(n.obj.typeName==='Artboard'||n.obj.typeName==='ViewModel')gCollapsed.add(n.obj.index);n.children.forEach(walk)}tree.forEach(walk)}
+  gLayout();
+
+  const cv=document.getElementById('gcanvas');
+  // Mouse events
+  cv.addEventListener('mousedown',e=>{if(e.button!==0)return;gDragX=e.clientX;gDragY=e.clientY;gDidDrag=false;const r=cv.getBoundingClientRect();const hit=gHitTest(e.clientX-r.left,e.clientY-r.top);if(hit){gDragNode=hit;gSelectNode(hit);gShowLinks=gLinkedSet.size>0;gShowPanel(hit);cv.style.cursor='move'}else{gDragging=true;cv.classList.add('grabbing')}gDraw()});
+  window.addEventListener('mousemove',e=>{if(gDragNode){gDidDrag=true;gDragNode._x+=(e.clientX-gDragX)/gZoom;gDragNode._y+=(e.clientY-gDragY)/gZoom;gDragX=e.clientX;gDragY=e.clientY;gDraw()}else if(gDragging){gDidDrag=true;gCamX-=(e.clientX-gDragX)/gZoom;gCamY-=(e.clientY-gDragY)/gZoom;gDragX=e.clientX;gDragY=e.clientY;gDraw()}});
+  window.addEventListener('mouseup',()=>{gDragNode=null;gDragging=false;gShowLinks=false;cv.style.cursor='grab';cv.classList.remove('grabbing');gDraw()});
+  cv.addEventListener('click',e=>{if(gDidDrag)return;const r=cv.getBoundingClientRect();const hit=gHitTest(e.clientX-r.left,e.clientY-r.top);gSelectNode(hit);gDraw();gShowPanel(hit)});
+  cv.addEventListener('dblclick',e=>{const r=cv.getBoundingClientRect();const hit=gHitTest(e.clientX-r.left,e.clientY-r.top);if(hit&&hit.children.length){if(gCollapsed.has(hit.obj.index))gCollapsed.delete(hit.obj.index);else gCollapsed.add(hit.obj.index);gLayout();gSelectNode(hit);gCamX=hit._x;gCamY=hit._y;gDraw();gShowPanel(hit)}});
+  cv.addEventListener('contextmenu',e=>{e.preventDefault();const r=cv.getBoundingClientRect();const hit=gHitTest(e.clientX-r.left,e.clientY-r.top);if(hit){gSelectNode(hit);gDraw();gShowPanel(hit);gShowCtx(e,hit)}else gHideCtx()});
+  cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;const W=cv.clientWidth,H=cv.clientHeight;const wx=(mx-W/2)/gZoom+gCamX,wy=(my-H/2)/gZoom+gCamY;gZoom=Math.max(.05,Math.min(8,gZoom*(e.deltaY<0?1.15:1/1.15)));gCamX=wx-(mx-W/2)/gZoom;gCamY=wy-(my-H/2)/gZoom;gDraw()},{passive:false});
+  window.addEventListener('click',gHideCtx);
+  setTimeout(gFit,50);
+}
+
+// ── UI Controller ──
+
+function esc(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
+
+// ── i18n ──
+let lang = (navigator.language||'').startsWith('zh') ? 'zh' : 'en';
+const I18N = {
+  zh: {
+    dropTitle:'Rive Inspector',dropHint:'拖拽 .riv 文件到此处，或',dropLink:'点击选择文件',
+    tabTree:'🌳 树形',tabStats:'📊 统计',tabGraph:'🔗 图形',tabExport:'💾 导出',openOther:'打开其他文件',
+    searchTree:'搜索类型、名称、属性...',expandAll:'展开全部',collapseAll:'折叠全部',expandLvl:'展开2层',
+    score:'渲染评分',fileSize:'文件大小',objCount:'对象数',embeddedAssets:'内嵌资源',
+    renderCost:'每帧渲染成本',clipPasses:'Clip passes',renderDetail:'渲染调用明细',
+    totalPaths:'路径总数',ctrlVerts:'控制顶点',renderPts:'⭐ 渲染点数',gradStops:'渐变色标',
+    hotShape:'🔥 热点 Shape',imgTex:'🔥 Image 纹理',meshDeform:'Mesh 变形',meshCount:'Mesh 数量',meshVerts:'Mesh 顶点',
+    anim:'动画',loopAnim:'循环动画',totalInterp:'总插值属性',pathRecalcAnim:'路径重算动画',topHeavy:'Top 5 最重动画',pathRecalcDetail:'🔥 路径重算',
+    smTitle:'State Machine',warnings:'⚠ 性能警告',distTitle:'对象分布',
+    exportTitle:'导出分析结果',exportTxt:'📄 导出文本报告',exportJson:'📋 导出 JSON 数据',exportStats:'📊 导出性能统计',
+    clickNode:'点击节点查看属性',filterProps:'过滤属性...',focusSub:'聚焦子树',expandKids:'展开子节点',collapseKids:'折叠子节点',showAll:'显示全部',
+    propPerFrame:'属性/帧',recalc:'次重算',draws:'draws',unknown:'未知',total:'共',times:'次',frame:'帧',renderPtsUnit:'渲染点',timesUnit:'次',alertBadFile:'请选择 .riv 文件',alertParseFail:'解析失败: ',
+  },
+  en: {
+    dropTitle:'Rive Inspector',dropHint:'Drop .riv file here, or',dropLink:'click to select',
+    tabTree:'🌳 Tree',tabStats:'📊 Stats',tabGraph:'🔗 Graph',tabExport:'💾 Export',openOther:'Open another',
+    searchTree:'Search type, name, property...',expandAll:'Expand All',collapseAll:'Collapse All',expandLvl:'Level 2',
+    score:'Render Score',fileSize:'File Size',objCount:'Objects',embeddedAssets:'Embedded Assets',
+    renderCost:'Per-frame Render Cost',clipPasses:'Clip passes',renderDetail:'Render Call Detail',
+    totalPaths:'Total Paths',ctrlVerts:'Control Vertices',renderPts:'⭐ Render Points',gradStops:'Gradient Stops',
+    hotShape:'🔥 Hot Shapes',imgTex:'🔥 Image Textures',meshDeform:'Mesh Deform',meshCount:'Mesh Count',meshVerts:'Mesh Vertices',
+    anim:'Animation',loopAnim:'Loop Anims',totalInterp:'Total Interp Props',pathRecalcAnim:'Path Recalc Anims',topHeavy:'Top 5 Heaviest',pathRecalcDetail:'🔥 Path Recalc',
+    smTitle:'State Machine',warnings:'⚠ Performance Warnings',distTitle:'Object Distribution',
+    exportTitle:'Export Analysis',exportTxt:'📄 Export Text Report',exportJson:'📋 Export JSON Data',exportStats:'📊 Export Stats Report',
+    clickNode:'Click a node to inspect',filterProps:'Filter properties...',focusSub:'Focus subtree',expandKids:'Expand children',collapseKids:'Collapse children',showAll:'Show all',
+    propPerFrame:'props/frame',recalc:' recalcs',draws:'draws',unknown:'unknown',total:'total',times:'x',frame:'frame',renderPtsUnit:'render pts',timesUnit:'x',alertBadFile:'Please select a .riv file',alertParseFail:'Parse error: ',
+  }
+};
+function t(key){return (I18N[lang]||I18N.en)[key]||key}
+function toggleLang(){lang=lang==='zh'?'en':'zh';document.getElementById('langBtn').textContent=lang==='zh'?'EN':'中';if(currentData)showMain();else updateDropzone()}
+function updateDropzone(){const dz=document.getElementById('dropzone');if(!dz)return;dz.querySelector('h1').textContent=t('dropTitle');dz.querySelector('p').innerHTML=t('dropHint')+' <label for="fileinput" class="link">'+t('dropLink')+'</label>'}
+
+let currentData = null;
+
+// ── File Drop ──
+const dropzone = document.getElementById('dropzone');
+const fileinput = document.getElementById('fileinput');
+
+function handleFile(file) {
+  if (!file || !file.name.endsWith('.riv')) { alert(t('alertBadFile')); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const {header, objects, fileSize} = parseRiv(e.target.result);
+      const tree = buildTree(objects);
+      resolveRefs(objects, tree);
+      const stats = computeStats(header, objects, tree, fileSize);
+      currentData = {header, objects, tree, stats, filename: file.name};
+      showMain();
+    } catch(err) { alert(t('alertParseFail') + err.message); console.error(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
+dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
+fileinput.addEventListener('change', e => handleFile(e.target.files[0]));
+document.getElementById('newfile').addEventListener('click', () => { document.getElementById('main').classList.add('hidden'); dropzone.classList.remove('hidden'); });
+
+// ── Tabs ──
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tabcontent').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'graph' && currentData) setTimeout(() => { gLayout(); gDraw(); gFit(); }, 50);
+  });
+});
+
+function showMain() {
+  dropzone.classList.add('hidden');
+  document.getElementById('main').classList.remove('hidden');
+  document.getElementById('filename').textContent = '📦 ' + currentData.filename + ' (' + currentData.objects.length + ' objects)';
+  // Update tab labels
+  const tabLabels={tree:t('tabTree'),stats:t('tabStats'),graph:t('tabGraph'),export:t('tabExport')};
+  document.querySelectorAll('.tab').forEach(tb=>{if(tabLabels[tb.dataset.tab])tb.textContent=tabLabels[tb.dataset.tab]});
+  document.getElementById('newfile').textContent=t('openOther');
+  renderTree();
+  renderStatsView();
+  renderGraphView();
+  renderExport();
+}
+
+// ── Tree View ──
+function renderTree() {
+  const container = document.getElementById('tab-tree');
+  let h = '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">';
+  h += '<input type="text" class="search" id="treeSearch" placeholder="'+t('searchTree')+'" style="flex:1">';
+  h += '<button class="btn-sm" onclick="treeSetAll(true)">'+t('expandAll')+'</button>';
+  h += '<button class="btn-sm" onclick="treeSetAll(false)">'+t('collapseAll')+'</button>';
+  h += '<button class="btn-sm" onclick="treeExpandLevel(2)">'+t('expandLvl')+'</button>';
+  h += '</div><div id="treeRoot"></div>';
+  container.innerHTML = h;
+  document.getElementById('treeSearch').addEventListener('input', e => renderTreeNodes(e.target.value.toLowerCase()));
+  renderTreeNodes('');
+}
+
+window.treeSetAll = function(open) {
+  document.querySelectorAll('#treeRoot .tkids').forEach(e=>e.classList.toggle('open',open));
+  document.querySelectorAll('#treeRoot .tprops').forEach(e=>e.classList.toggle('open',open));
+  document.querySelectorAll('#treeRoot .tarr:not(.leaf)').forEach(e=>e.classList.toggle('open',open));
+};
+window.treeExpandLevel = function(lvl) {
+  treeSetAll(false);
+  function walk(el,d){if(d>lvl)return;const k=el.querySelector(':scope>.tkids');const p=el.querySelector(':scope>.tprops');const a=el.querySelector(':scope>.trow>.tarr');if(k)k.classList.add('open');if(p&&d===lvl)p.classList.add('open');if(a)a.classList.add('open');if(k&&d<lvl)k.querySelectorAll(':scope>.tnode').forEach(c=>walk(c,d+1))}
+  document.querySelectorAll('#treeRoot>:scope>.tnode').forEach(e=>walk(e,0));
+};
+
+function renderTreeNodes(query) {
+  const root = document.getElementById('treeRoot');
+  function matchQ(n) {
+    if (!query) return true;
+    const s = (n.obj.typeName+' '+(n.obj.name||'')+' '+n.obj.properties.map(p=>propName(p.key)+' '+fmtVal(p,n.obj._refs)).join(' ')).toLowerCase();
+    return s.includes(query) || n.children.some(matchQ);
+  }
+  function renderNode(n, depth) {
+    if (query && !matchQ(n)) return '';
+    const o=n.obj, col=CAT_COLORS[o.category]||CAT_COLORS.other;
+    const hasKids=n.children.length>0, open=depth<1;
+    let h='<div class="tnode">';
+    h+='<div class="trow" onclick="treeToggle('+o.index+')">';
+    h+='<span class="tarr'+(hasKids?'':' leaf')+(open?' open':'')+'" id="ta'+o.index+'">▶</span>';
+    h+='<span class="tidx">#'+o.index+'</span>';
+    h+='<span class="tbadge" style="background:'+col+'">'+esc(o.typeName)+'</span>';
+    if(o.name)h+='<span class="tname">'+esc(o.name)+'</span>';
+    h+='</div>';
+    if(o.properties.length){
+      h+='<div class="tprops'+(open?' open':'')+'" id="tp'+o.index+'">';
+      const refs=o._refs||{};
+      for(const p of o.properties){
+        const vc=p.type===1?'s':p.type===5?'b':p.type===3?'c':'n';
+        let val=esc(fmtVal(p,refs));
+        if(p.type===3){const v=p.value>>>0;const a=(v>>24&0xff)/255,r=v>>16&0xff,g=v>>8&0xff,b=v&0xff;val='<span class="csw" style="background:rgba('+r+','+g+','+b+','+a.toFixed(2)+')"></span>'+val}
+        h+='<div class="tprop"><span class="tpk">'+esc(propName(p.key))+'</span><span class="tpv '+vc+'">'+val+'</span></div>';
+      }
+      h+='</div>';
+    }
+    if(hasKids){h+='<div class="tkids'+(open?' open':'')+'" id="tk'+o.index+'">';for(const c of n.children)h+=renderNode(c,depth+1);h+='</div>'}
+    h+='</div>';return h;
+  }
+  let html='';for(const r of currentData.tree)html+=renderNode(r,0);
+  root.innerHTML=html;
+}
+window.treeToggle = function(idx) {
+  const k=document.getElementById('tk'+idx),p=document.getElementById('tp'+idx),a=document.getElementById('ta'+idx);
+  if(k){k.classList.toggle('open');a.classList.toggle('open')}if(p)p.classList.toggle('open');
+};
+
+// ── Stats View ──
+function renderStatsView() {
+  const container = document.getElementById('tab-stats');
+  const s = currentData.stats;
+  const sr = (k,v,hot) => '<div class="strow'+(hot?' hot':'')+'"><span class="sk">'+esc(String(k))+'</span><span class="sv">'+esc(String(v))+'</span></div>';
+  const fmtB = b => b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(1)+'KB':b+' B';
+  const stars = '★'.repeat(s.summary.score) + '☆'.repeat(5-s.summary.score);
+  const sm=s.summary, rd=s.renderDetail;
+  let h = '<div style="display:flex;gap:16px;flex-wrap:wrap">';
+
+  // Left column
+  h+='<div style="flex:1;min-width:320px">';
+
+  h+='<div class="stsec"><h3>'+stars+' '+t('score')+'</h3>';
+  h+=sr(t('fileSize'),fmtB(s.file.size));h+=sr(t('objCount'),s.file.objects);
+  if(s.file.assetCount)h+=sr(t('embeddedAssets'),s.file.assetCount+' ('+fmtB(s.file.assetBytes)+')',s.file.assetBytes>1048576);
+  h+='</div>';
+
+  // Render cost with donut
+  h+='<div class="stsec"><h3>'+t('renderCost')+'</h3>';
+  h+='<div style="display:flex;gap:12px;align-items:center">';
+  h+='<canvas id="stDonut1" width="120" height="120"></canvas>';
+  h+='<div>';
+  h+=sr('Draw calls',sm.totalDraws+'/frame',sm.totalDraws>50);
+  h+=sr('Clip passes',sm.totalClips,sm.totalClips>10);
+  h+=sr('Mesh',sm.totalMeshes,sm.totalMeshes>20);
+  h+=sr('⭐ Image',sm.totalImages,sm.totalImages>0);
+  h+='</div></div></div>';
+
+  // Render detail
+  h+='<div class="stsec"><h3>'+t('renderDetail')+'</h3>';
+  h+=sr(t('totalPaths'),rd.totalPaths);h+=sr(t('ctrlVerts'),rd.totalVertices);
+  h+=sr(t('renderPts'),rd.totalRenderPoints,true);h+=sr(t('gradStops'),rd.totalGradientStops);
+  // Paint breakdown bars
+  const pb=rd.paintBreakdown,pr=rd.paintRenderPts;
+  if(Object.keys(pb).length){
+    h+='<canvas id="stPaintBars" width="300" height="'+Math.max(40,Object.keys(pb).length*22+8)+'" style="margin-top:6px"></canvas>';
+  }
+  h+='</div>';
+
+  // Hot shapes
+  const hotShapes=(s.shapeCosts||[]).filter(c=>c.draws>1||c.clips>0||c.meshes>0);
+  if(hotShapes.length){h+='<div class="stsec"><h3>'+t('hotShape')+' ('+hotShapes.length+')</h3>';for(const sc of hotShapes.slice(0,10))h+='<div class="strow hot"><span class="sk">#'+sc.index+' '+(sc.name||'Shape')+'</span><span class="sv">'+sc.draws+' draws'+(sc.clips?' +'+sc.clips+'clip':'')+'</span></div>';h+='</div>'}
+
+  // Image
+  if(s.imageDetail.length){h+='<div class="stsec"><h3>'+t('imgTex')+' ('+s.imageDetail.length+')</h3>';for(const img of s.imageDetail){const sz=img.width?Math.round(img.width)+'×'+Math.round(img.height):t('unknown');h+='<div class="strow hot"><span class="sk">'+esc(img.name)+'</span><span class="sv">'+sz+' '+(img.hasMesh?'drawImageMesh':'drawImage')+'</span></div>'}h+='</div>'}
+  if(s.meshDetail.count){h+='<div class="stsec"><h3>'+t('meshDeform')+'</h3>';h+=sr(t('meshCount'),s.meshDetail.count);h+=sr(t('meshVerts'),s.meshDetail.meshVertices);for(const t of s.meshDetail.textures)h+=sr(t.name,(t.width?Math.round(t.width)+'×'+Math.round(t.height):''));h+='</div>'}
+
+  h+='</div>'; // end left
+
+  // Right column
+  h+='<div style="flex:1;min-width:320px">';
+
+  // Animation with bar chart
+  const anims=s.animAnalysis;
+  if(anims.length){
+    const loopA=anims.filter(a=>a.loop==='loop'),recalcA=anims.filter(a=>a.pathRecalcs.length),totalP=anims.reduce((s,a)=>s+a.propsPerFrame,0),totalR=recalcA.reduce((s,a)=>s+a.pathRecalcs.length,0),topH=anims.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame).slice(0,5).filter(a=>a.propsPerFrame>0);
+    h+='<div class="stsec"><h3>'+t('anim')+' ('+anims.length+')</h3>';
+    h+=sr(t('loopAnim'),loopA.length+'/'+anims.length);h+=sr(t('totalInterp'),totalP);h+=sr(t('pathRecalcAnim'),recalcA.length+(totalR?' ('+t('total')+totalR+'次/帧)':''),recalcA.length>0);
+    if(topH.length)h+='<canvas id="stAnimBars" width="300" height="'+Math.max(40,topH.length*28+8)+'" style="margin-top:6px"></canvas>';
+    if(recalcA.length){h+='<div style="margin-top:6px;font-size:11px;color:#ff6b6b">'+t('pathRecalcDetail')+'</div>';for(const a of recalcA.slice(0,5)){const targets=[...new Set(a.pathRecalcs.map(p=>p.target))].slice(0,3).join(', ');h+='<div style="font-size:11px;padding:1px 0"><span style="color:#ffa94d">'+esc(a.name)+'</span>: '+a.pathRecalcs.length+'次 → '+esc(targets)+'</div>'}}
+    h+='</div>';
+  }
+
+  // State Machine with bar chart
+  const smd=s.stateMachine;
+  h+='<div class="stsec"><h3>State Machine ('+smd.count+')</h3>';
+  h+=sr('Layers',smd.layers,smd.layers>10);h+=sr('Listeners',smd.listeners,smd.listeners>10);
+  h+=sr('Conditions',smd.conditions);h+=sr('Inputs',smd.inputs);h+=sr('States',smd.states);h+=sr('Transitions',smd.transitions);
+  if(smd.count)h+='<canvas id="stSmBars" width="300" height="100" style="margin-top:6px"></canvas>';
+  h+='</div>';
+
+  // Distribution with donut
+  const dist=s.distribution;
+  h+='<div class="stsec"><h3>'+t('distTitle')+'</h3>';
+  h+='<div style="display:flex;gap:12px;align-items:center">';
+  h+='<canvas id="stDonut2" width="130" height="130"></canvas>';
+  h+='<div id="stDistLeg" style="font-size:11px"></div>';
+  h+='</div></div>';
+
+  // Warnings
+  if(s.warnings.length){h+='<div class="stsec"><h3>'+t('warnings')+'</h3>';for(const w of s.warnings)h+='<div class="stwarn">• '+esc(w)+'</div>';h+='</div>'}
+
+  h+='</div>'; // end right
+  h+='</div>'; // end flex
+  container.innerHTML=h;
+
+  // Draw charts after DOM ready
+  setTimeout(()=>drawStatsCharts(s),0);
+}
+
+function drawStatsCharts(s){
+  const sm=s.summary, rd=s.renderDetail;
+  let tipEl=document.getElementById('stTip');
+  if(!tipEl){tipEl=document.createElement('div');tipEl.id='stTip';tipEl.style.cssText='display:none;position:fixed;background:#1a1b26;border:1px solid #3b4261;color:#c0caf5;padding:6px 10px;border-radius:4px;font-size:11px;pointer-events:none;z-index:200;max-width:260px;line-height:1.4';document.body.appendChild(tipEl)}
+  function addHover(cv,regions,redrawFn){let hIdx=-1;cv.style.cursor='crosshair';
+    cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let hit=-1;
+      for(let i=0;i<regions.length;i++){const rg=regions[i];if(rg.r!==undefined){const dx=mx-rg.cx,dy=my-rg.cy;if(Math.sqrt(dx*dx+dy*dy)>rg.r)continue;let a=Math.atan2(dy,dx);if(a<-Math.PI/2)a+=Math.PI*2;if(a>=rg.sa&&a<rg.ea){hit=i;break}}else if(mx>=rg.x&&mx<=rg.x+rg.w&&my>=rg.y&&my<=rg.y+rg.h){hit=i;break}}
+      if(hit!==hIdx){hIdx=hit;if(redrawFn)redrawFn(hIdx)}
+      if(hit>=0){const rg=regions[hit];tipEl.style.display='block';tipEl.style.left=(e.clientX+12)+'px';tipEl.style.top=(e.clientY-10)+'px';tipEl.innerHTML='<b>'+esc(rg.label)+'</b>: '+esc(String(rg.value))+(rg.desc?'<br><span style="color:#9aa5ce">'+esc(rg.desc)+'</span>':'')}else tipEl.style.display='none'});
+    cv.addEventListener('mouseleave',()=>{tipEl.style.display='none';if(hIdx>=0){hIdx=-1;if(redrawFn)redrawFn(-1)}})}
+  const DC={drawPath:'Fill/Stroke draw call',clipPath:'Stencil clip pass',drawImage:'Texture bindraw',drawImageMesh:'Mesh skinning+draw'};
+  const d1=document.getElementById('stDonut1');
+  if(d1){const data=[['drawPath',sm.totalDraws,'#ffa94d'],['clipPath',sm.totalClips,'#f06595'],['drawImage',sm.totalImages,'#748ffc'],['drawImageMesh',sm.totalMeshes,'#da77f2']].filter(d=>d[1]>0);
+    function dr1(hi){const c=d1.getContext('2d');c.clearRect(0,0,d1.width,d1.height);return stDonut(c,60,60,48,25,data,hi)}
+    const rg=dr1(-1);addHover(d1,rg.map(r=>({...r,desc:DC[r.label]||''})),dr1)}
+  const pbC=document.getElementById('stPaintBars');
+  if(pbC){const items=Object.entries(rd.paintBreakdown).sort((a,b)=>b[1]-a[1]);const pr=rd.paintRenderPts,maxV=Math.max(...items.map(d=>d[1]),1);pbC.width=pbC.parentElement.clientWidth-16||300;const barH=18,gap=4,tp=2;pbC.height=items.length*(barH+gap)+tp;
+    const cols={'Fill+Solid':'#ffa94d','Fill+Linear':'#da77f2','Fill+Radial':'#f06595','Stroke+Solid':'#ff6b6b','Stroke+Linear':'#748ffc','Stroke+Radial':'#e8590c'};const rg=[];
+    function drPB(hi){const c=pbC.getContext('2d');c.clearRect(0,0,pbC.width,pbC.height);c.font='11px -apple-system,sans-serif';rg.length=0;
+      items.forEach(([key,cnt],i)=>{const y=tp+i*(barH+gap);const w=Math.max(cnt/maxV*(pbC.width-220),4);const cl=cols[key]||'#565f89';c.fillStyle=i===hi?lc(cl):cl;c.fillRect(100,y,w,barH);if(i===hi){c.strokeStyle='#fff';c.lineWidth=1;c.strokeRect(100,y,w,barH)}c.fillStyle='#9aa5ce';c.textBaseline='middle';c.textAlign='right';c.fillText(key,95,y+barH/2);c.textAlign='left';c.fillStyle='#c0caf5';c.fillText(cnt+'x '+(pr[key]||0)+'pts',105+w,y+barH/2);rg.push({x:0,y,w:pbC.width,h:barH,label:key,value:cnt+'x, '+(pr[key]||0)+' render pts',desc:key})})}
+    drPB(-1);addHover(pbC,rg,drPB)}
+  const abC=document.getElementById('stAnimBars');
+  if(abC){const topH=s.animAnalysis.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame).slice(0,5).filter(a=>a.propsPerFrame>0);
+    if(topH.length){const maxP=Math.max(...topH.map(a=>a.propsPerFrame),1);abC.width=abC.parentElement.clientWidth-16||300;const barH=22,gap=6,tp=2;abC.height=topH.length*(barH+gap)+tp;const rg=[];
+      function drAB(hi){const c=abC.getContext('2d');c.clearRect(0,0,abC.width,abC.height);c.font='11px -apple-system,sans-serif';rg.length=0;
+        topH.forEach((a,i)=>{const y=tp+i*(barH+gap);const w=Math.max(a.propsPerFrame/maxP*(abC.width-180),4);const hr=a.pathRecalcs.length;const cl=hr?'#ff6b6b':'#69db7c';c.fillStyle=i===hi?lc(cl):cl;c.fillRect(90,y,w,barH);if(i===hi){c.strokeStyle='#fff';c.lineWidth=1;c.strokeRect(90,y,w,barH)}c.fillStyle='#9aa5ce';c.textBaseline='middle';c.textAlign='right';c.fillText(a.name.substring(0,10),85,y+barH/2);c.textAlign='left';c.fillStyle='#c0caf5';c.fillText(a.propsPerFrame+t('propPerFrame')+(hr?' 🔥'+hr:''),95+w,y+barH/2);rg.push({x:0,y,w:abC.width,h:barH,label:a.name,value:a.propsPerFrame+' '+t('propPerFrame')+' ('+a.loop+')',desc:hr?hr+t('recalc'):'No path recalc'})})}
+      drAB(-1);addHover(abC,rg,drAB)}}
+  const sbC=document.getElementById('stSmBars');
+  if(sbC&&s.stateMachine.count){const smd=s.stateMachine;const items=[['Layers',smd.layers,'#da77f2'],['Listeners',smd.listeners,'#ffa94d'],['Conditions',smd.conditions,'#4a9eff'],['Inputs',smd.inputs,'#69db7c'],['States',smd.states,'#748ffc'],['Transitions',smd.transitions,'#565f89']];
+    const sd={Layers:'Concurrent animations',Listeners:'Per-frame hit test',Conditions:'Condition eval',Inputs:'Input triggers',States:'One active/layer',Transitions:'State connections'};
+    const maxV=Math.max(...items.map(d=>d[1]),1);sbC.width=sbC.parentElement.clientWidth-16||300;const barH=13,gap=3,tp=2;sbC.height=items.length*(barH+gap)+tp;const rg=[];
+    function drSB(hi){const c=sbC.getContext('2d');c.clearRect(0,0,sbC.width,sbC.height);c.font='10px -apple-system,sans-serif';rg.length=0;
+      items.forEach((d,i)=>{const y=tp+i*(barH+gap);const w=Math.max(d[1]/maxV*(sbC.width-130),2);c.fillStyle=i===hi?lc(d[2]):d[2];c.fillRect(75,y,w,barH);if(i===hi){c.strokeStyle='#fff';c.lineWidth=1;c.strokeRect(75,y,w,barH)}c.fillStyle='#9aa5ce';c.textBaseline='middle';c.textAlign='right';c.fillText(d[0],70,y+barH/2);c.textAlign='left';c.fillStyle='#c0caf5';c.fillText(String(d[1]),80+w,y+barH/2);rg.push({x:0,y,w:sbC.width,h:barH,label:d[0],value:d[1],desc:sd[d[0]]||''})})}
+    drSB(-1);addHover(sbC,rg,drSB)}
+  const d2=document.getElementById('stDonut2');
+  if(d2){const dist=s.distribution;const data=Object.entries(dist).map(([cat,cnt])=>[cat,cnt,CAT_COLORS[cat]||CAT_COLORS.other]).filter(d=>d[1]>0);const total=data.reduce((s,d)=>s+d[1],0);
+    function dr2(hi){const c=d2.getContext('2d');c.clearRect(0,0,d2.width,d2.height);return stDonut(c,65,65,55,30,data,hi)}
+    const rg=dr2(-1);addHover(d2,rg.map(r=>({...r,desc:Math.round(r.value/total*100)+'%'})),dr2);
+    const leg=document.getElementById('stDistLeg');if(leg)leg.innerHTML=data.map(d=>'<div style="display:flex;align-items:center;gap:4px;padding:1px 0"><span style="width:8px;height:8px;border-radius:50%;background:'+d[2]+';flex-shrink:0"></span><span style="color:#9aa5ce;flex:1">'+esc(d[0])+'</span><span style="color:#c0caf5">'+d[1]+'</span></div>').join('')}
+}
+function lc(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgb('+Math.min(r+60,255)+','+Math.min(g+60,255)+','+Math.min(b+60,255)+')'}
+function stDonut(c,cx,cy,r,hole,data,hi){
+  const total=data.reduce((s,d)=>s+d[1],0);const rg=[];if(!total)return rg;let angle=-Math.PI/2;
+  data.forEach((d,i)=>{const slice=d[1]/total*Math.PI*2;const isH=i===hi;const dr=isH?6:0;const ma=angle+slice/2;const ox=isH?Math.cos(ma)*4:0,oy=isH?Math.sin(ma)*4:0;
+    c.beginPath();c.moveTo(cx+ox,cy+oy);c.arc(cx+ox,cy+oy,r+dr,angle,angle+slice);c.closePath();c.fillStyle=isH?lc(d[2]):d[2];c.fill();if(isH){c.strokeStyle='#fff';c.lineWidth=2;c.stroke()}
+    rg.push({cx,cy,r:r+6,sa:angle,ea:angle+slice,label:d[0],value:d[1]});angle+=slice});
+  c.beginPath();c.arc(cx,cy,hole,0,Math.PI*2);c.fillStyle='#24283b';c.fill();
+  c.fillStyle='#c0caf5';c.font='bold 14px -apple-system,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(String(total),cx,cy);return rg}
+
+function renderGraphView() {
+  const container = document.getElementById('tab-graph');
+  container.innerHTML = `
+    <canvas id="gcanvas" style="cursor:grab"></canvas>
+    <div class="gbar">
+      <button class="gbtn" onclick="gFit()">Fit</button>
+      <button class="gbtn" onclick="gZoom=Math.min(8,gZoom*1.3);gDraw()">+</button>
+      <button class="gbtn" onclick="gZoom=Math.max(.05,gZoom/1.3);gDraw()">−</button>
+      <button class="gbtn" onclick="gGoRoot()">Root</button>
+      <button class="gbtn" onclick="gGoArtboard()">Artboard</button>
+      <button class="gbtn" onclick="gShowTypeOverview('LinearAnimation')">Timeline</button>
+      <button class="gbtn" onclick="gShowTypeOverview('StateMachine')">StateMachine</button>
+      <button class="gbtn" onclick="gShowSchema()">Schema</button>
+    </div>
+    <div id="gbreadcrumb" style="position:absolute;top:40px;left:8px;font-size:11px;z-index:5"></div>
+    <div class="gpanel"><p style="color:#565f89;padding:20px">点击节点查看属性</p></div>
+    <div id="gctx" style="display:none;position:fixed;background:#24283b;border:1px solid #3b4261;border-radius:6px;padding:4px 0;z-index:50;min-width:180px">
+      <div id="gctxFocus" class="trow" onclick="gCtxAction('focus')" style="padding:6px 14px;font-size:12px">'+t('focusSub')+'</div>
+      <div id="gctxExpand" class="trow" onclick="gCtxAction('expand')" style="padding:6px 14px;font-size:12px">'+t('expandKids')+'</div>
+      <div id="gctxCollapse" class="trow" onclick="gCtxAction('collapse')" style="padding:6px 14px;font-size:12px">'+t('collapseKids')+'</div>
+      <div style="border-top:1px solid #3b4261;margin:2px 0"></div>
+      <div class="trow" onclick="gCtxAction('reset')" style="padding:6px 14px;font-size:12px">'+t('showAll')+'</div>
+    </div>
+    <div id="gschema" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:center" onclick="if(event.target===this)this.style.display='none'">
+      <div style="background:#24283b;border:1px solid #3b4261;border-radius:8px;width:600px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid #3b4261;display:flex;align-items:center">
+          <h3 style="flex:1;color:#7aa2f7;font-size:14px">Schema Reference</h3>
+          <button class="btn-sm" onclick="document.getElementById('gschema').style.display='none'">✕</button>
+        </div>
+        <div style="display:flex;border-bottom:1px solid #3b4261">
+          <span class="tab active" onclick="document.querySelectorAll('#gschema .tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');gRenderSchema('types',document.getElementById('gschemaQ').value)">Type Keys</span>
+          <span class="tab" onclick="document.querySelectorAll('#gschema .tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');gRenderSchema('props',document.getElementById('gschemaQ').value)">Property Keys</span>
+        </div>
+        <input type="text" id="gschemaQ" class="search" style="margin:8px 16px;width:calc(100%-32px)" placeholder="搜索..." oninput="gRenderSchema(document.querySelector('#gschema .tab.active').textContent.includes('Type')?'types':'props',this.value)">
+        <div id="gschemaBody" style="flex:1;overflow-y:auto;padding:0 16px 12px"></div>
+      </div>
+    </div>
+  `;
+  initGraph(currentData.tree);
+}
+
+// ── Export View ──
+function renderExport() {
+  document.getElementById('tab-export').innerHTML = `
+    <h2 style="color:#7aa2f7;margin-bottom:16px">导出分析结果</h2>
+    <button class="exp-btn" onclick="exportText()">📄 导出文本报告 (.txt)</button>
+    <button class="exp-btn" onclick="exportJSON()">📋 导出 JSON 数据</button>
+    <button class="exp-btn" onclick="exportStats()">📊 导出性能统计 (.txt)</button>
+    <p style="color:#565f89;margin-top:16px;font-size:12px">文件: ${esc(currentData.filename)} | ${currentData.objects.length} 对象</p>
+  `;
+}
+
+function downloadFile(name, content, type='text/plain') {
+  const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+}
+
+window.exportText = function() {
+  let out='=== RIVE File: '+currentData.filename+' ===\nVersion: '+currentData.header.majorVersion+'.'+currentData.header.minorVersion+'\n\n';
+  function printNode(n,indent){const o=n.obj,pfx='  '.repeat(indent),label=o.name?' "'+o.name+'"':'';out+=pfx+'['+o.index+'] '+o.typeName+label+' (typeKey='+o.typeKey+') @'+o.offset+'\n';const refs=o._refs||{};for(const p of o.properties)out+=pfx+'  '+propName(p.key)+': '+fmtVal(p,refs)+'\n';for(const c of n.children)printNode(c,indent+1)}
+  currentData.tree.forEach(r=>printNode(r,0));out+='\n=== Total: '+currentData.objects.length+' objects ===\n';
+  downloadFile(currentData.filename.replace('.riv','')+'.txt',out);
+};
+
+window.exportJSON = function() {
+  function n2j(n){return{index:n.obj.index,type:n.obj.typeName,name:n.obj.name,properties:n.obj.properties.map(p=>({name:propName(p.key),key:p.key,value:p.value,type:p.type})),children:n.children.map(n2j)}}
+  downloadFile(currentData.filename.replace('.riv','')+'.json',JSON.stringify({header:currentData.header,tree:currentData.tree.map(n2j),stats:currentData.stats},null,2),'application/json');
+};
+
+window.exportStats = function() {
+  const s=currentData.stats,sm=s.summary,rd=s.renderDetail;
+  let out='Analysis: '+currentData.filename+'\n'+'='.repeat(50)+'\n\n';
+  out+=t('score')+': '+'★'.repeat(sm.score)+'☆'.repeat(5-sm.score)+'\n';
+  out+='Draw calls: '+sm.totalDraws+'/帧  Clip: '+sm.totalClips+'  Mesh: '+sm.totalMeshes+'  Image: '+sm.totalImages+'\n';
+  out+='路径: '+rd.totalPaths+'  控制顶点: '+rd.totalVertices+'  渲染点数: '+rd.totalRenderPoints+'\n\n';
+  const pb=rd.paintBreakdown,pr=rd.paintRenderPts;for(const k of Object.keys(pb).sort())out+=k+': '+pb[k]+t('timesUnit')+' '+(pr[k]||0)+'渲染点\n';
+  out+='\n动画: '+s.animAnalysis.length+'个\n';const topH=s.animAnalysis.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame).slice(0,5);for(const a of topH)out+='  '+a.name+': '+a.propsPerFrame+t('propPerFrame')+(a.pathRecalcs.length?' 🔥'+a.pathRecalcs.length+t('recalc'):'')+'\n';
+  out+='\nState Machine: '+s.stateMachine.count+' (Layers:'+s.stateMachine.layers+' Listeners:'+s.stateMachine.listeners+')\n';
+  if(s.warnings.length){out+='\n⚠ 警告:\n';for(const w of s.warnings)out+='  • '+w+'\n'}
+  downloadFile(currentData.filename.replace('.riv','')+'_stats.txt',out);
+};
+
+</script>
+</body></html>
