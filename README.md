@@ -74,6 +74,8 @@ Canvas 节点图，支持：
 - 交叉引用可视化（橙色虚线连接）
 - 📊 Stats 按钮查看图形化统计图表
 
+<img width="1265" height="562" alt="image" src="https://github.com/user-attachments/assets/f3b4486c-c917-40fa-b345-ad099483b160" />
+
 ### 性能统计 (`--stats`)
 
 输出渲染评分（1~5 星）、每帧渲染成本、热点 Shape、Image 纹理、Mesh 变形、动画复杂度、State Machine 指标和性能警告。
