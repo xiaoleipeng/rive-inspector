@@ -52,6 +52,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .stbar .bar{height:12px;border-radius:3px;min-width:2px}
 .stbar .bl{color:#9aa5ce;min-width:80px}.stbar .bv{color:#565f89}
 .stwarn{color:#ffa94d;font-size:12px;padding:2px 0}
+/* Detail modal */
+#detail-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:1000;display:none;align-items:center;justify-content:center}
+#detail-modal.open{display:flex}
+#detail-body{background:#1f2335;border:1px solid #3b4261;border-radius:8px;max-width:720px;width:90%;max-height:80vh;display:flex;flex-direction:column}
+#detail-header{display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid #3b4261}
+#detail-title{flex:1;font-size:14px;font-weight:600;color:#7aa2f7}
+#detail-close{background:none;border:none;color:#565f89;font-size:18px;cursor:pointer;padding:0 4px}
+#detail-close:hover{color:#c0caf5}
+#detail-content{overflow:auto;padding:12px 16px;font-size:12px}
+#detail-content table{width:100%;border-collapse:collapse}
+#detail-content th{text-align:left;color:#7aa2f7;padding:3px 8px;border-bottom:1px solid #3b4261;font-size:11px;position:sticky;top:0;background:#1f2335}
+#detail-content td{padding:3px 8px;border-bottom:1px solid #24283b;color:#c0caf5}
+#detail-content tr:hover td{background:#24283b}
+.clickable-header{cursor:pointer;user-select:none}
+.clickable-header:hover{color:#bb9af7}
+.clickable-header::after{content:' ▸';font-size:10px;color:#565f89}
 /* Graph */
 #tab-graph{padding:0;position:relative}
 #gcanvas{display:block;cursor:grab;width:100%;height:100%}
@@ -93,6 +109,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="tab-graph" class="tabcontent"><canvas id="gcanvas"></canvas></div>
 <div id="tab-export" class="tabcontent"></div>
 </div>
+<div id="detail-modal"><div id="detail-body"><div id="detail-header"><span id="detail-title"></span><button id="detail-close" onclick="closeDetail()">✕</button></div><div id="detail-content"></div></div></div>
 </div>
 <script>
 // Schema
@@ -249,10 +266,13 @@ const STACK_CHILDREN = {
   26: new Set([30,37,84,142,50,450,170,171,29]),
   53: new Set([57,56,58,59,114]),
   57: new Set([60,61,62,63,64,73,76,527,528,145]),
-  61: new Set([65,78]), 62: new Set([65,78]), 63: new Set([65,78]),
-  73: new Set([65,78]), 76: new Set([65,78]),
+  61: new Set([65,78,74,75,77,169]), 62: new Set([65,78,169]), 63: new Set([65,78,169]),
+  73: new Set([65,78,74,75,77,169]), 76: new Set([65,78,74,75,77,169]),
+  527: new Set([65,78,74,75,77,169]), 528: new Set([65,78,74,75,77,169]),
   65: new Set([67,68,69,70,71,482,497]),
   78: new Set([67,68,69,70,71,482,497]),
+  482: new Set([477,478,479,480,481,483,484,485,486,496,505]),
+  497: new Set([477,478,479,480,481,483,484,485,486,496,505]),
   114: new Set([115,116,117,118,125,126,168,487]),
   105: new Set([106]), 141: new Set([106]), 406: new Set([106]),
   102: new Set([105,141,406]),
@@ -430,9 +450,44 @@ function computeStats(header, objects, tree, fileSize) {
   const shapeCosts = [];
   let artboardFills = 0;
 
+  // Build artboard component maps and node index for resolving ClippingShape sourceId
+  const abCompMaps = {}; let _cAb=null, _ccc=0;
+  for (const o of objects) {
+    if (o.typeName==='Artboard') { _cAb=o.index; abCompMaps[_cAb]={0:o}; _ccc=1; }
+    else if (_cAb!==null && o.parentId!==null) { abCompMaps[_cAb][_ccc++]=o; }
+    else if (_cAb!==null && o.parentId===null && o.typeName!=='Artboard') {}
+  }
+  const objToAb={}; _cAb=null;
+  for (const o of objects) { if(o.typeName==='Artboard') _cAb=o.index; if(_cAb!==null) objToAb[o.index]=_cAb; }
+  const nodeByIdx={};
+  function _idxN(n){nodeByIdx[n.obj.index]=n;n.children.forEach(_idxN);}
+  tree.forEach(_idxN);
+
+  function calcClipRenderPts(srcNode) {
+    let pts=0;
+    function w(n) {
+      const tn=n.obj.typeName;
+      if (pathParam.has(tn)) {
+        if (tn==='Ellipse') pts+=13;
+        else if (tn==='Rectangle') { const cr=gp(n.obj,'cornerRadiusTL')||gp(n.obj,'cornerRadiusTR')||gp(n.obj,'cornerRadiusBL')||gp(n.obj,'cornerRadiusBR')||gp(n.obj,'cornerRadius'); pts+=cr?16:4; }
+        else if (tn==='Triangle') pts+=3;
+        else if (tn==='Polygon') { const np=gp(n.obj,'points')||5; const cr=gp(n.obj,'cornerRadius'); pts+=cr?np*4:np; }
+        else if (tn==='Star') { const np=(gp(n.obj,'points')||5)*2; const cr=gp(n.obj,'cornerRadius'); pts+=cr?np*4:np; }
+        else pts+=4;
+      } else if (pathFree.has(tn)) {
+        let rp=1;
+        for (const vc of n.children) { const vtn=vc.obj.typeName; if(vtxTypes.has(vtn)){if(vtn.includes('Cubic'))rp+=3;else if(vtn==='StraightVertex'&&gp(vc.obj,'radius'))rp+=4;else rp+=1;} }
+        pts+=rp;
+      }
+      n.children.forEach(w);
+    }
+    w(srcNode);
+    return pts;
+  }
+
   function analyzeShape(node) {
     const o = node.obj;
-    let clips=0, verts=0, renderPts=0, meshes=0, bones=0, images=0;
+    let clips=0, clipRenderPts=0, verts=0, renderPts=0, meshes=0, bones=0, images=0;
     const paths=[], paints=[];
     for (const c of node.children) {
       const tn = c.obj.typeName;
@@ -445,24 +500,29 @@ function computeStats(header, objects, tree, fileSize) {
           else if (gtn==='RadialGradient') { colorType='Radial'; stops=gc.children.filter(x=>x.obj.typeName==='GradientStop').length; }
         }
         paints.push({paint:tn,color:colorType,stops});
-      } else if (tn==='ClippingShape') clips++;
+      } else if (tn==='ClippingShape') {
+        clips++;
+        const srcId=gp(c.obj,'sourceId');
+        if (srcId!==null) { const ab=objToAb[o.index]; if(ab!==undefined){const so=(abCompMaps[ab]||{})[srcId]; if(so){const sn=nodeByIdx[so.index]; if(sn) clipRenderPts+=calcClipRenderPts(sn);}} }
+      }
       else if (pathParam.has(tn)) {
         let cv=4, rp=4;
         if (tn==='Ellipse') { cv=4; rp=13; }
+        else if (tn==='Rectangle') { const cr=gp(c.obj,'cornerRadiusTL')||gp(c.obj,'cornerRadiusTR')||gp(c.obj,'cornerRadiusBL')||gp(c.obj,'cornerRadiusBR')||gp(c.obj,'cornerRadius'); cv=4; rp=cr?4*4:4; }
         else if (tn==='Triangle') { cv=3; rp=3; }
-        else if (tn==='Polygon') { const n=gp(c.obj,'points')||5; cv=n; rp=n; }
-        else if (tn==='Star') { const n=(gp(c.obj,'points')||5)*2; cv=n; rp=n; }
+        else if (tn==='Polygon') { const n=gp(c.obj,'points')||5; const cr=gp(c.obj,'cornerRadius'); cv=n; rp=cr?n*4:n; }
+        else if (tn==='Star') { const n=(gp(c.obj,'points')||5)*2; const cr=gp(c.obj,'cornerRadius'); cv=n; rp=cr?n*4:n; }
         paths.push({type:tn,mode:'param',vertices:cv,renderPts:rp}); verts+=cv; renderPts+=rp;
       } else if (pathFree.has(tn)) {
         let vc=0, rp=1;
-        for (const vc2 of c.children) { const vtn=vc2.obj.typeName; if(vtxTypes.has(vtn)){vc++;rp+=vtn.includes('Cubic')?3:1;} }
+        for (const vc2 of c.children) { const vtn=vc2.obj.typeName; if(vtxTypes.has(vtn)){vc++;if(vtn.includes('Cubic'))rp+=3;else if(vtn==='StraightVertex'&&gp(vc2.obj,'radius'))rp+=4;else rp+=1;} }
         paths.push({type:tn,mode:'free',vertices:vc,renderPts:rp}); verts+=vc; renderPts+=rp;
       } else if (tn==='Mesh') meshes++;
       else if (tn==='Image') images++;
     }
     function cntBones(n) { let b=0; for(const c of n.children){if(c.obj.typeName==='Bone'||c.obj.typeName==='RootBone')b++;b+=cntBones(c);}return b; }
     bones = cntBones(node);
-    return {index:o.index,name:resolveName(node),draws:paints.length,clips,paths,vertices:verts,renderPoints:renderPts,colors:paints.map(p=>p.color),meshes,bones,images,paints};
+    return {index:o.index,name:resolveName(node),draws:paints.length,clips,clipRenderPoints:clipRenderPts,paths,vertices:verts,renderPoints:renderPts,colors:paints.map(p=>p.color),meshes,bones,images,paints};
   }
 
   function walkShapes(node) {
@@ -472,13 +532,13 @@ function computeStats(header, objects, tree, fileSize) {
   }
   tree.forEach(walkShapes);
 
-  let standImg=0,standMesh=0,standBone=0;
-  function walkStandalone(n){const tn=n.obj.typeName;if(tn==='Shape')return;if(tn==='Image')standImg++;if(tn==='Mesh')standMesh++;if(tn==='Bone'||tn==='RootBone')standBone++;n.children.forEach(walkStandalone);}
+  let standImg=0,standMesh=0,standBone=0,standClips=0,standClipRPts=0;
+  function walkStandalone(n){const tn=n.obj.typeName;if(tn==='Shape')return;if(tn==='Image')standImg++;if(tn==='Mesh')standMesh++;if(tn==='Bone'||tn==='RootBone')standBone++;if(tn==='ClippingShape'){standClips++;const si=gp(n.obj,'sourceId');if(si!==null){const ab=objToAb[n.obj.index];if(ab!==undefined){const so=(abCompMaps[ab]||{})[si];if(so){const sn=nodeByIdx[so.index];if(sn)standClipRPts+=calcClipRenderPts(sn);}}}}n.children.forEach(walkStandalone);}
   tree.forEach(walkStandalone);
 
   shapeCosts.sort((a,b)=>(b.draws+b.clips*2)-(a.draws+a.clips*2));
   const totalDraws=shapeCosts.reduce((s,c)=>s+c.draws,0)+artboardFills;
-  const totalClips=shapeCosts.reduce((s,c)=>s+c.clips,0);
+  const totalClips=shapeCosts.reduce((s,c)=>s+c.clips,0)+standClips;
   const totalMeshes=shapeCosts.reduce((s,c)=>s+c.meshes,0)+standMesh;
   const totalBones=shapeCosts.reduce((s,c)=>s+c.bones,0)+standBone;
   const totalImages=shapeCosts.reduce((s,c)=>s+c.images,0)+standImg;
@@ -487,7 +547,7 @@ function computeStats(header, objects, tree, fileSize) {
   // Render detail
   const paintBD={},paintVT={},paintRP={};
   let totalPathCount=0,totalPathVerts=0,totalRenderPts=0,totalGradStops=0;
-  for(const sc of shapeCosts){totalPathCount+=sc.paths.length;totalPathVerts+=sc.vertices;totalRenderPts+=sc.renderPoints;for(const p of sc.paints){const k=p.paint+'+'+p.color;paintBD[k]=(paintBD[k]||0)+1;paintVT[k]=(paintVT[k]||0)+sc.vertices;paintRP[k]=(paintRP[k]||0)+sc.renderPoints;totalGradStops+=p.stops;}}
+  for(const sc of shapeCosts){totalPathCount+=sc.paths.length;const np=Math.max(sc.paints.length,1);totalPathVerts+=sc.vertices*np;totalRenderPts+=sc.renderPoints*np;for(const p of sc.paints){const k=p.paint+'+'+p.color;paintBD[k]=(paintBD[k]||0)+1;paintVT[k]=(paintVT[k]||0)+sc.vertices;paintRP[k]=(paintRP[k]||0)+sc.renderPoints;totalGradStops+=p.stops;}}
   totalPathCount+=artboardFills;totalRenderPts+=artboardFills*4;
 
   // Image detail
@@ -503,9 +563,7 @@ function computeStats(header, objects, tree, fileSize) {
 
   // Animation analysis
   const pathProps=new Set([20,21,24,25,26,31,79,80,81,82,83,84,85,86,87,110,125,126,127,161,162,163]);
-  const abCompMaps={};let cAb=null,ccc=0;
-  for(const o of objects){if(o.typeName==='Artboard'){cAb=o.index;abCompMaps[cAb]={0:o};ccc=1;}else if(cAb!==null&&o.parentId!==null){abCompMaps[cAb][ccc++]=o;}}
-  const objToAb={};cAb=null;for(const o of objects){if(o.typeName==='Artboard')cAb=o.index;if(cAb!==null)objToAb[o.index]=cAb;}
+  // Reuse abCompMaps, objToAb built earlier for ClippingShape resolution
 
   const animAnalysis=[];
   for(const o of objects){
@@ -534,19 +592,35 @@ function computeStats(header, objects, tree, fileSize) {
   const catCounts={};for(const o of objects)catCounts[o.category]=(catCounts[o.category]||0)+1;
 
   const warnings=[];
-  if(totalPathVerts>500)warnings.push('顶点数较多 ('+totalPathVerts+')');
-  if(totalDraws>50)warnings.push('Draw calls 较多 ('+totalDraws+'/帧)');
-  if(totalClips>10)warnings.push('裁剪较多 ('+totalClips+')');
-  if(totalMeshes>20)warnings.push('Mesh 较多 ('+totalMeshes+')');
-  if(assetBytes>1048576)warnings.push('内嵌资源较大 ('+(assetBytes/1048576).toFixed(1)+'MB)');
-  if(animAnalysis.some(a=>a.pathRecalcs.length))warnings.push('存在动画触发路径重算');
+  if(totalPathVerts>500)warnings.push(t('warnVertices')+' ('+totalPathVerts+')');
+  if(totalDraws>50)warnings.push(t('warnDrawCalls')+' ('+totalDraws+'/frame)');
+  if(totalClips>10)warnings.push(t('warnClips')+' ('+totalClips+')');
+  if(totalMeshes>20)warnings.push(t('warnMesh')+' ('+totalMeshes+')');
+  if(assetBytes>1048576)warnings.push(t('warnAssets')+' ('+(assetBytes/1048576).toFixed(1)+'MB)');
+  if(animAnalysis.some(a=>a.pathRecalcs.length))warnings.push(t('warnPathRecalc'));
   const score=Math.min(5,1+(totalDraws>20?1:0)+(totalDraws>50?1:0)+(totalClips>5?1:0)+(totalMeshes>10?1:0)+(animAnalysis.some(a=>a.pathRecalcs.length)?1:0));
+
+  // Feather analysis
+  const featherDetail=[];
+  const scMap={};shapeCosts.forEach(sc=>scMap[sc.index]=sc);
+  function walkFeather(n,shapeN,paintN){
+    const tn=n.obj.typeName;
+    if(tn==='Shape')shapeN=n;
+    else if(tn==='Fill'||tn==='Stroke')paintN=n;
+    else if(tn==='Feather'&&shapeN){const sc=scMap[shapeN.obj.index]||{};let mnx=Infinity,mny=Infinity,mxx=-Infinity,mxy=-Infinity;for(const c of shapeN.children){const ct=c.obj.typeName;if(pathParam.has(ct)){const w=gp(c.obj,'width')||0,h=gp(c.obj,'height')||0;if(w||h){mnx=Math.min(mnx,0);mny=Math.min(mny,0);mxx=Math.max(mxx,w);mxy=Math.max(mxy,h);}}else if(pathFree.has(ct)){for(const vc of c.children){if(vtxTypes.has(vc.obj.typeName)){const vx=gp(vc.obj,'x')||0,vy=gp(vc.obj,'y')||0;mnx=Math.min(mnx,vx);mxx=Math.max(mxx,vx);mny=Math.min(mny,vy);mxy=Math.max(mxy,vy);}}}}const pw=mnx===Infinity?0:Math.round((mxx-mnx)*10)/10,ph=mny===Infinity?0:Math.round((mxy-mny)*10)/10;featherDetail.push({shapeName:shapeN.obj.name||sc.name||'',shapeIndex:shapeN.obj.index,paintType:paintN?paintN.obj.typeName:'?',strength:gp(n.obj,'strength')||12,inner:gp(n.obj,'inner')||false,paths:(sc.paths||[]).length,renderPoints:sc.renderPoints||0,pathWidth:pw,pathHeight:ph});}
+    n.children.forEach(c=>walkFeather(c,shapeN,paintN));
+  }
+  tree.forEach(r=>walkFeather(r,null,null));
+  if(featherDetail.length>20)warnings.push(t('warnFeatherMany')+' ('+featherDetail.length+')');
+  if(featherDetail.filter(f=>f.strength>50).length)warnings.push(t('warnFeatherStr')+' ('+featherDetail.filter(f=>f.strength>50).length+' >50)');
+  if(featherDetail.filter(f=>f.inner).length>10)warnings.push(t('warnFeatherInner')+' ('+featherDetail.filter(f=>f.inner).length+')');
 
   return {
     file:{size:fileSize,objects:objects.length,assetBytes,assetCount},artboards,
     shapeCosts:shapeCosts.slice(0,20),shapeTotal:shapeCosts.length,
-    renderDetail:{drawPath:totalDraws,clipPath:totalClips,drawImage:totalImages,drawImageMesh:totalMeshes,totalCalls:totalDraws+totalClips+totalImages+totalMeshes,totalPaths:totalPathCount,totalVertices:totalPathVerts,totalRenderPoints:totalRenderPts,totalGradientStops:totalGradStops,paintBreakdown:paintBD,paintVertices:paintVT,paintRenderPts:paintRP},
+    renderDetail:{drawPath:totalDraws,clipPath:totalClips,clipRenderPoints:shapeCosts.reduce((s,c)=>s+(c.clipRenderPoints||0),0)+standClipRPts,drawImage:totalImages,drawImageMesh:totalMeshes,totalCalls:totalDraws+totalClips+totalImages+totalMeshes,totalPaths:totalPathCount,totalVertices:totalPathVerts,totalRenderPoints:totalRenderPts,totalGradientStops:totalGradStops,paintBreakdown:paintBD,paintVertices:paintVT,paintRenderPts:paintRP},
     imageDetail:imageDraws,meshDetail:{count:totalMeshes,meshVertices:meshVerts,textures:assetList},
+    featherDetail,
     summary:{totalDraws,totalClips,totalMeshes,totalBones,totalImages,artboardFills,drawDist,score},
     animAnalysis,stateMachine:smData,hierarchy:{maxDepth},distribution:catCounts,warnings,
   };
@@ -742,6 +816,10 @@ const I18N = {
     exportTitle:'导出分析结果',exportTxt:'📄 导出文本报告',exportJson:'📋 导出 JSON 数据',exportStats:'📊 导出性能统计',
     clickNode:'点击节点查看属性',filterProps:'过滤属性...',focusSub:'聚焦子树',expandKids:'展开子节点',collapseKids:'折叠子节点',showAll:'显示全部',
     propPerFrame:'属性/帧',recalc:'次重算',draws:'draws',unknown:'未知',total:'共',times:'次',frame:'帧',renderPtsUnit:'渲染点',timesUnit:'次',alertBadFile:'请选择 .riv 文件',alertParseFail:'解析失败: ',
+    clipRenderPts:'Clip 渲染点数',featherTitle:'Feather 羽化',featherInner:'inner',featherMaxStr:'最大 strength',featherHeavy:'🔥 高开销',
+    dlgShapeTitle:'热点 Shape',dlgFeatherTitle:'Feather 羽化',dlgImageTitle:'Image 纹理',dlgAnimTitle:'动画',
+    thName:'名称',thPath:'路径',thVerts:'顶点',thRenderPts:'渲染点',thColor:'颜色',thSize:'尺寸',thType:'类型',thFps:'fps',thFrames:'帧数',thLoop:'循环',thPropsFrame:'属性/帧',thPathRecalc:'路径重算',thBlurArea:'模糊面积',thPathSize:'路径尺寸',
+    warnVertices:'顶点数较多',warnDrawCalls:'Draw calls 较多',warnClips:'裁剪较多',warnMesh:'Mesh 较多',warnAssets:'内嵌资源较大',warnDepth:'层级较深',warnPathRecalc:'存在动画触发路径重算',warnFeatherMany:'Feather 较多',warnFeatherStr:'存在高 strength Feather',warnFeatherInner:'Inner Feather 较多',
   },
   en: {
     dropTitle:'Rive Inspector',dropHint:'Drop .riv file here, or',dropLink:'click to select',
@@ -756,6 +834,10 @@ const I18N = {
     exportTitle:'Export Analysis',exportTxt:'📄 Export Text Report',exportJson:'📋 Export JSON Data',exportStats:'📊 Export Stats Report',
     clickNode:'Click a node to inspect',filterProps:'Filter properties...',focusSub:'Focus subtree',expandKids:'Expand children',collapseKids:'Collapse children',showAll:'Show all',
     propPerFrame:'props/frame',recalc:' recalcs',draws:'draws',unknown:'unknown',total:'total',times:'x',frame:'frame',renderPtsUnit:'render pts',timesUnit:'x',alertBadFile:'Please select a .riv file',alertParseFail:'Parse error: ',
+    clipRenderPts:'Clip Render Points',featherTitle:'Feather',featherInner:'inner',featherMaxStr:'Max strength',featherHeavy:'🔥 Heavy',
+    dlgShapeTitle:'Hot Shapes',dlgFeatherTitle:'Feather',dlgImageTitle:'Image Textures',dlgAnimTitle:'Animation',
+    thName:'Name',thPath:'Path',thVerts:'Verts',thRenderPts:'Render Pts',thColor:'Color',thSize:'Size',thType:'Type',thFps:'fps',thFrames:'Frames',thLoop:'Loop',thPropsFrame:'Props/Frame',thPathRecalc:'Path Recalc',thBlurArea:'Blur Area',thPathSize:'Path Size',
+    warnVertices:'Too many vertices',warnDrawCalls:'Too many draw calls',warnClips:'Too many clips',warnMesh:'Too many meshes',warnAssets:'Large embedded assets',warnDepth:'Deep hierarchy',warnPathRecalc:'Animation triggers path recalc',warnFeatherMany:'Too many feathers',warnFeatherStr:'High strength feather',warnFeatherInner:'Too many inner feathers',
   }
 };
 function t(key){return (I18N[lang]||I18N.en)[key]||key}
@@ -805,6 +887,8 @@ function showMain() {
   dropzone.classList.add('hidden');
   document.getElementById('main').classList.remove('hidden');
   document.getElementById('filename').textContent = '📦 ' + currentData.filename + ' (' + currentData.objects.length + ' objects)';
+  // Recompute stats (warnings depend on current language)
+  currentData.stats = computeStats(currentData.header, currentData.objects, currentData.tree, currentData.stats.file.size);
   // Update tab labels
   const tabLabels={tree:t('tabTree'),stats:t('tabStats'),graph:t('tabGraph'),export:t('tabExport')};
   document.querySelectorAll('.tab').forEach(tb=>{if(tabLabels[tb.dataset.tab])tb.textContent=tabLabels[tb.dataset.tab]});
@@ -836,8 +920,8 @@ window.treeSetAll = function(open) {
 };
 window.treeExpandLevel = function(lvl) {
   treeSetAll(false);
-  function walk(el,d){if(d>lvl)return;const k=el.querySelector(':scope>.tkids');const p=el.querySelector(':scope>.tprops');const a=el.querySelector(':scope>.trow>.tarr');if(k)k.classList.add('open');if(p&&d===lvl)p.classList.add('open');if(a)a.classList.add('open');if(k&&d<lvl)k.querySelectorAll(':scope>.tnode').forEach(c=>walk(c,d+1))}
-  document.querySelectorAll('#treeRoot>:scope>.tnode').forEach(e=>walk(e,0));
+  function walk(el,d){if(d>lvl)return;const k=el.querySelector(':scope>.tkids');const p=el.querySelector(':scope>.tprops');const a=el.querySelector(':scope>.trow>.tarr');if(k)k.classList.add('open');if(p&&d===lvl)p.classList.add('open');if(a)a.classList.add('open');if(k&&d<lvl){for(const c of k.children){if(c.classList.contains('tnode'))walk(c,d+1);}}}
+  document.querySelectorAll('#treeRoot>.tnode').forEach(e=>walk(e,0));
 };
 
 function renderTreeNodes(query) {
@@ -881,6 +965,63 @@ window.treeToggle = function(idx) {
 };
 
 // ── Stats View ──
+function showDetail(title, html) {
+  document.getElementById('detail-title').textContent = title;
+  document.getElementById('detail-content').innerHTML = html;
+  document.getElementById('detail-modal').classList.add('open');
+}
+function closeDetail() { document.getElementById('detail-modal').classList.remove('open'); }
+document.getElementById('detail-modal').addEventListener('click', e => { if (e.target.id==='detail-modal') closeDetail(); });
+
+function showShapeDetail() {
+  const s=currentData.stats, all=s.shapeCosts||[];
+  let h='<table><tr><th>#</th><th>'+t('thName')+'</th><th>draws</th><th>clip</th><th>'+t('thPath')+'</th><th>'+t('thVerts')+'</th><th>'+t('thRenderPts')+'</th><th>mesh</th><th>bone</th><th>'+t('thColor')+'</th></tr>';
+  for(const sc of all){
+    const colors=(sc.colors||[]).join(', ');
+    const pathStr=(sc.paths||[]).map(p=>p.type).join(', ');
+    h+='<tr><td>'+sc.index+'</td><td>'+esc(sc.name||'')+'</td><td>'+sc.draws+'</td><td>'+sc.clips+'</td><td>'+esc(pathStr)+'</td><td>'+sc.vertices+'</td><td>'+sc.renderPoints+'</td><td>'+sc.meshes+'</td><td>'+sc.bones+'</td><td>'+esc(colors)+'</td></tr>';
+  }
+  if(s.shapeTotal>all.length) h+='<tr><td colspan="10" style="color:#565f89">... '+t('total')+' '+s.shapeTotal+' Shape</td></tr>';
+  h+='</table>';
+  showDetail(t('dlgShapeTitle')+' ('+s.shapeTotal+')', h);
+}
+
+function showFeatherDetail() {
+  const fd=currentData.stats.featherDetail||[];
+  const sorted=fd.slice().sort((a,b)=>{const ca=(a.pathWidth+a.strength*3)*(a.pathHeight+a.strength*3),cb=(b.pathWidth+b.strength*3)*(b.pathHeight+b.strength*3);return cb-ca;});
+  let h='<table><tr><th>#</th><th>Shape</th><th>Paint</th><th>inner</th><th>strength</th><th>'+t('thPathSize')+'</th><th>paths</th><th>'+t('thRenderPts')+'</th><th>'+t('thBlurArea')+'</th></tr>';
+  for(const f of sorted){
+    const sz=f.pathWidth||f.pathHeight?f.pathWidth+'×'+f.pathHeight:'?';
+    const area=f.pathWidth||f.pathHeight?Math.round((f.pathWidth+f.strength*3)*(f.pathHeight+f.strength*3)):'?';
+    h+='<tr><td>'+f.shapeIndex+'</td><td>'+esc(f.shapeName||'unnamed')+'</td><td>'+esc(f.paintType)+'</td><td>'+(f.inner?'✓':'')+'</td><td>'+f.strength.toFixed(1)+'</td><td>'+sz+'</td><td>'+f.paths+'</td><td>'+f.renderPoints+'</td><td>'+area+'</td></tr>';
+  }
+  h+='</table>';
+  showDetail(t('dlgFeatherTitle')+' ('+fd.length+')', h);
+}
+
+function showImageDetail() {
+  const imgs=currentData.stats.imageDetail||[];
+  let h='<table><tr><th>#</th><th>'+t('thName')+'</th><th>'+t('thSize')+'</th><th>'+t('thType')+'</th></tr>';
+  for(const img of imgs){
+    const sz=img.width?Math.round(img.width)+'×'+Math.round(img.height):'?';
+    h+='<tr><td>'+img.index+'</td><td>'+esc(img.name)+'</td><td>'+sz+'</td><td>'+(img.hasMesh?'drawImageMesh':'drawImage')+'</td></tr>';
+  }
+  h+='</table>';
+  showDetail(t('dlgImageTitle')+' ('+imgs.length+')', h);
+}
+
+function showAnimDetail() {
+  const anims=currentData.stats.animAnalysis||[];
+  const sorted=anims.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame);
+  let h='<table><tr><th>'+t('thName')+'</th><th>'+t('thFps')+'</th><th>'+t('thFrames')+'</th><th>'+t('thLoop')+'</th><th>'+t('thPropsFrame')+'</th><th>'+t('thPathRecalc')+'</th></tr>';
+  for(const a of sorted){
+    const recalc=a.pathRecalcs.length?a.pathRecalcs.length+'x':'';
+    h+='<tr><td>'+esc(a.name)+'</td><td>'+a.fps+'</td><td>'+a.duration+'</td><td>'+a.loop+'</td><td>'+a.propsPerFrame+'</td><td style="color:'+(a.pathRecalcs.length?'#ff6b6b':'')+'">'+recalc+'</td></tr>';
+  }
+  h+='</table>';
+  showDetail(t('dlgAnimTitle')+' ('+anims.length+')', h);
+}
+
 function renderStatsView() {
   const container = document.getElementById('tab-stats');
   const s = currentData.stats;
@@ -905,6 +1046,7 @@ function renderStatsView() {
   h+='<div style="padding:4px 0;line-height:1.8">';
   h+=sr('Draw calls',sm.totalDraws+'/frame',sm.totalDraws>50);
   h+=sr('Clip passes',sm.totalClips,sm.totalClips>10);
+  if(rd.clipRenderPoints)h+=sr(t('clipRenderPts'),rd.clipRenderPoints);
   h+=sr('Mesh',sm.totalMeshes,sm.totalMeshes>20);
   h+=sr('⭐ Image',sm.totalImages,sm.totalImages>0);
   h+='</div></div></div>';
@@ -922,11 +1064,12 @@ function renderStatsView() {
 
   // Hot shapes
   const hotShapes=(s.shapeCosts||[]).filter(c=>c.draws>1||c.clips>0||c.meshes>0);
-  if(hotShapes.length){h+='<div class="stsec"><h3>'+t('hotShape')+' ('+hotShapes.length+')</h3>';for(const sc of hotShapes.slice(0,10))h+='<div class="strow hot"><span class="sk">#'+sc.index+' '+(sc.name||'Shape')+'</span><span class="sv">'+sc.draws+' draws'+(sc.clips?' +'+sc.clips+'clip':'')+'</span></div>';h+='</div>'}
+  if(hotShapes.length){h+='<div class="stsec"><h3 class="clickable-header" onclick="showShapeDetail()">'+t('hotShape')+' ('+hotShapes.length+')</h3>';for(const sc of hotShapes.slice(0,10))h+='<div class="strow hot"><span class="sk">#'+sc.index+' '+(sc.name||'Shape')+'</span><span class="sv">'+sc.draws+' draws'+(sc.clips?' +'+sc.clips+'clip':'')+'</span></div>';h+='</div>'}
 
   // Image
-  if(s.imageDetail.length){h+='<div class="stsec"><h3>'+t('imgTex')+' ('+s.imageDetail.length+')</h3>';for(const img of s.imageDetail){const sz=img.width?Math.round(img.width)+'×'+Math.round(img.height):t('unknown');h+='<div class="strow hot"><span class="sk">'+esc(img.name)+'</span><span class="sv">'+sz+' '+(img.hasMesh?'drawImageMesh':'drawImage')+'</span></div>'}h+='</div>'}
+  if(s.imageDetail.length){h+='<div class="stsec"><h3 class="clickable-header" onclick="showImageDetail()">'+t('imgTex')+' ('+s.imageDetail.length+')</h3>';for(const img of s.imageDetail){const sz=img.width?Math.round(img.width)+'×'+Math.round(img.height):t('unknown');h+='<div class="strow hot"><span class="sk">'+esc(img.name)+'</span><span class="sv">'+sz+' '+(img.hasMesh?'drawImageMesh':'drawImage')+'</span></div>'}h+='</div>'}
   if(s.meshDetail.count){h+='<div class="stsec"><h3>'+t('meshDeform')+'</h3>';h+=sr(t('meshCount'),s.meshDetail.count);h+=sr(t('meshVerts'),s.meshDetail.meshVertices);for(const t of s.meshDetail.textures)h+=sr(t.name,(t.width?Math.round(t.width)+'×'+Math.round(t.height):''));h+='</div>'}
+  if(s.featherDetail&&s.featherDetail.length){const fd=s.featherDetail,ni=fd.filter(f=>f.inner).length,ms=Math.max(...fd.map(f=>f.strength));const shapes=new Set(fd.map(f=>f.shapeIndex));h+='<div class="stsec"><h3 class="clickable-header" onclick="showFeatherDetail()">'+t('featherTitle')+' ('+fd.length+', '+shapes.size+' Shape)</h3>';h+=sr(t('featherInner'),ni);h+=sr(t('featherMaxStr'),ms.toFixed(1));const heavy=fd.filter(f=>f.strength>50||(f.pathWidth+f.strength*3)*(f.pathHeight+f.strength*3)>500000).sort((a,b)=>{const ca=(a.pathWidth+a.strength*3)*(a.pathHeight+a.strength*3),cb=(b.pathWidth+b.strength*3)*(b.pathHeight+b.strength*3);return cb-ca;});const show=heavy.length?heavy.slice(0,5):fd.slice().sort((a,b)=>b.strength-a.strength).slice(0,5);if(show.length){h+='<div style="margin-top:6px;font-size:12px;color:#f7768e">'+t('featherHeavy')+':</div>';for(const f of show){const sz=f.pathWidth||f.pathHeight?f.pathWidth+'×'+f.pathHeight:'?';h+='<div class="strow hot"><span class="sk">#'+f.shapeIndex+' '+esc(f.shapeName||'unnamed')+'</span><span class="sv">'+esc(f.paintType)+(f.inner?' [inner]':'')+' str='+f.strength.toFixed(0)+' size='+sz+' pts='+f.renderPoints+'</span></div>'}}h+='</div>'}
 
   h+='</div>'; // end left
 
@@ -937,7 +1080,7 @@ function renderStatsView() {
   const anims=s.animAnalysis;
   if(anims.length){
     const loopA=anims.filter(a=>a.loop==='loop'),recalcA=anims.filter(a=>a.pathRecalcs.length),totalP=anims.reduce((s,a)=>s+a.propsPerFrame,0),totalR=recalcA.reduce((s,a)=>s+a.pathRecalcs.length,0),topH=anims.slice().sort((a,b)=>b.propsPerFrame-a.propsPerFrame).slice(0,5).filter(a=>a.propsPerFrame>0);
-    h+='<div class="stsec"><h3>'+t('anim')+' ('+anims.length+')</h3>';
+    h+='<div class="stsec"><h3 class="clickable-header" onclick="showAnimDetail()">'+t('anim')+' ('+anims.length+')</h3>';
     h+=sr(t('loopAnim'),loopA.length+'/'+anims.length);h+=sr(t('totalInterp'),totalP);h+=sr(t('pathRecalcAnim'),recalcA.length+(totalR?' ('+t('total')+totalR+'次/帧)':''),recalcA.length>0);
     if(topH.length)h+='<canvas id="stAnimBars" width="300" height="'+Math.max(30,topH.length*20+4)+'" style="margin-top:4px"></canvas>';
     if(recalcA.length){h+='<div style="margin-top:6px;font-size:11px;color:#ff6b6b">'+t('pathRecalcDetail')+'</div>';for(const a of recalcA.slice(0,5)){const targets=[...new Set(a.pathRecalcs.map(p=>p.target))].slice(0,3).join(', ');h+='<div style="font-size:11px;padding:1px 0"><span style="color:#ffa94d">'+esc(a.name)+'</span>: '+a.pathRecalcs.length+'次 → '+esc(targets)+'</div>'}}

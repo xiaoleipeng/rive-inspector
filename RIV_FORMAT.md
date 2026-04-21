@@ -400,12 +400,16 @@ PointsPath (isClosed=true)
 | 路径类型 | 控制顶点 | 渲染点数 | 说明 |
 |---------|---------|---------|------|
 | Rectangle | 4 | 4 | moveTo + 3×lineTo |
+| Rectangle(圆角) | 4 | 16 | 每个角: lineTo + cubicTo = 4 pts |
 | Triangle | 3 | 3 | moveTo + 2×lineTo |
 | Ellipse | 4 | 13 | moveTo + 4×cubicTo（每个 cubicTo 3 点） |
 | Polygon(N) | N | N | moveTo + (N-1)×lineTo |
+| Polygon(N,圆角) | N | 4N | 每个顶点: lineTo + cubicTo |
 | Star(N) | 2N | 2N | moveTo + (2N-1)×lineTo |
+| Star(N,圆角) | 2N | 8N | 每个顶点: lineTo + cubicTo |
 | 自由路径(N个CubicVertex) | N | 1+3N | moveTo + N×cubicTo |
 | 自由路径(N个StraightVertex) | N | N | moveTo + (N-1)×lineTo |
+| 自由路径(StraightVertex带radius) | 1 | 4 | lineTo + cubicTo |
 
 > **性能分析时应关注渲染点数而非控制顶点数。** 同样 4 个控制顶点，Ellipse 生成 13 个渲染点（4 段三次贝塞尔曲线），Rectangle 只生成 4 个（4 条直线），GPU 开销差 3 倍多。
 

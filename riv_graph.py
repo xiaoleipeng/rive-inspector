@@ -769,6 +769,7 @@ function renderStats(){{
     h+='<div style="flex:1">';
     h+=sr('drawPath',rd.drawPath);
     h+=sr('clipPath',rd.clipPath);
+    if(rd.clipRenderPoints)h+=sr('Clip 渲染点数',rd.clipRenderPoints);
     h+=sr('drawImage',rd.drawImage);
     h+=sr('drawImageMesh',rd.drawImageMesh);
     h+=sr('总调用',rd.totalCalls);
@@ -808,6 +809,25 @@ function renderStats(){{
     for(const t of md.textures){{
       const sz=t.width?Math.round(t.width)+'\u00d7'+Math.round(t.height):'';
       h+=sr(t.name,sz);
+    }}
+    h+='</div>';
+  }}
+
+  // Feather
+  const feathers=s.featherDetail||[];
+  if(feathers.length){{
+    const ni=feathers.filter(f=>f.inner).length,ms=Math.max(...feathers.map(f=>f.strength));
+    const shapes=new Set(feathers.map(f=>f.shapeIndex));
+    h+='<div class="stat-section"><h3>Feather 羽化 ('+feathers.length+', '+shapes.size+' Shape)</h3>';
+    h+=sr('inner',ni);h+=sr('最大 strength',ms.toFixed(1));
+    const heavy=feathers.filter(f=>f.strength>50||(f.pathWidth+f.strength*3)*(f.pathHeight+f.strength*3)>500000).sort((a,b)=>((b.pathWidth+b.strength*3)*(b.pathHeight+b.strength*3))-((a.pathWidth+a.strength*3)*(a.pathHeight+a.strength*3)));
+    const show=heavy.length?heavy:feathers.slice().sort((a,b)=>b.strength-a.strength).slice(0,5);
+    if(show.length){{
+      h+='<div style="margin-top:4px;font-weight:bold;color:#f7768e">\U0001f525 高开销:</div>';
+      for(const f of show){{
+        const sz=f.pathWidth||f.pathHeight?f.pathWidth+'\u00d7'+f.pathHeight:'?';
+        h+=sr('#'+f.shapeIndex+' '+(f.shapeName||'unnamed'),f.paintType+(f.inner?' [inner]':'')+' str='+f.strength.toFixed(0)+' size='+sz+' pts='+f.renderPoints);
+      }}
     }}
     h+='</div>';
   }}

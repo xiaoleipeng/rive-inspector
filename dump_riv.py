@@ -142,13 +142,17 @@ STACK_CHILDREN = {
     26: {30,37,84,142,50,450,170,171,29},  # KeyedProperty -> KeyFrame*
     53: {57,56,58,59,114},  # StateMachine -> Layer, Number, Bool, Trigger, Listener
     57: {60,61,62,63,64,73,76,527,528,145},  # Layer -> States
-    61: {65,78},       # AnimationState -> Transition
-    62: {65,78},       # AnyState -> Transition
-    63: {65,78},       # EntryState -> Transition
-    73: {65,78},       # BlendStateDirect -> Transition
-    76: {65,78},       # BlendState1DInput -> Transition
+    61: {65,78,74,75,77,169},  # AnimationState -> Transition, BlendAnimation*, FireEvent
+    62: {65,78,169},   # AnyState -> Transition, FireEvent
+    63: {65,78,169},   # EntryState -> Transition, FireEvent
+    73: {65,78,74,75,77,169},  # BlendStateDirect -> Transition, BlendAnimation*, FireEvent
+    76: {65,78,74,75,77,169},  # BlendState1DInput -> Transition, BlendAnimation*, FireEvent
+    527: {65,78,74,75,77,169}, # BlendState1D -> Transition, BlendAnimation*, FireEvent
+    528: {65,78,74,75,77,169}, # BlendState1DViewModel -> Transition, BlendAnimation*, FireEvent
     65: {67,68,69,70,71,482,497},  # StateTransition -> Conditions
     78: {67,68,69,70,71,482,497},  # BlendStateTransition -> Conditions
+    482: {477,478,479,480,481,483,484,485,486,496,505},  # TransitionViewModelCondition -> Comparators
+    497: {477,478,479,480,481,483,484,485,486,496,505},  # TransitionArtboardCondition -> Comparators
     114: {115,116,117,118,125,126,168,487},  # Listener -> Actions
     105: {106},        # ImageAsset -> FileAssetContents
     141: {106},        # FontAsset -> FileAssetContents
@@ -751,6 +755,67 @@ def compute_stats(header, objects, filename, filepath, tree):
         for c in n["children"]: build_parent_map(c, n)
     for r in tree: build_parent_map(r)
 
+    # Build artboard component index map (needed for resolving ClippingShape sourceId)
+    ab_comp_maps = {}  # artboard_obj_index → {comp_idx: obj}
+    _cur_ab = None; _cc = 0
+    for o in objects:
+        if o["typeName"] == "Artboard":
+            _cur_ab = o["index"]; ab_comp_maps[_cur_ab] = {0: o}; _cc = 1
+        elif _cur_ab is not None and o["parentId"] is not None:
+            ab_comp_maps[_cur_ab][_cc] = o; _cc += 1
+        elif _cur_ab is not None and o["parentId"] is None and o["typeName"] != "Artboard":
+            pass
+    # Map object global index → artboard global index
+    _obj_to_ab = {}; _cur_ab = None
+    for o in objects:
+        if o["typeName"] == "Artboard": _cur_ab = o["index"]
+        if _cur_ab is not None: _obj_to_ab[o["index"]] = _cur_ab
+    # Build global index → tree node map
+    node_by_index = {}
+    def _index_nodes(n):
+        node_by_index[n["obj"]["index"]] = n
+        for c in n["children"]: _index_nodes(c)
+    for r in tree: _index_nodes(r)
+
+    def calc_clip_render_pts(source_node):
+        """Calculate total render points of all paths under a clip source node."""
+        pts = 0
+        def _walk(n):
+            nonlocal pts
+            tn = n["obj"]["typeName"]
+            if tn in path_types_param:
+                if tn == "Ellipse": pts += 13
+                elif tn == "Rectangle":
+                    cr = get_prop(n["obj"], "cornerRadiusTL") or get_prop(n["obj"], "cornerRadiusTR") or \
+                         get_prop(n["obj"], "cornerRadiusBL") or get_prop(n["obj"], "cornerRadiusBR") or \
+                         get_prop(n["obj"], "cornerRadius")
+                    pts += 4 * 4 if cr else 4
+                elif tn == "Triangle": pts += 3
+                elif tn == "Polygon":
+                    n_pts = get_prop(n["obj"], "points") or 5
+                    cr = get_prop(n["obj"], "cornerRadius")
+                    pts += n_pts * 4 if cr else n_pts
+                elif tn == "Star":
+                    n_pts = (get_prop(n["obj"], "points") or 5) * 2
+                    cr = get_prop(n["obj"], "cornerRadius")
+                    pts += n_pts * 4 if cr else n_pts
+                else: pts += 4
+            elif tn in path_types_free:
+                rp = 1
+                for vc in n["children"]:
+                    vtn = vc["obj"]["typeName"]
+                    if vtn in vertex_types:
+                        if vtn in ("CubicDetachedVertex", "CubicAsymmetricVertex", "CubicMirroredVertex"):
+                            rp += 3
+                        elif vtn == "StraightVertex" and get_prop(vc["obj"], "radius"):
+                            rp += 4
+                        else:
+                            rp += 1
+                pts += rp
+            for c in n["children"]: _walk(c)
+        _walk(source_node)
+        return pts
+
     def resolve_name(node):
         """Get shape name, or nearest named ancestor's name as fallback."""
         if node["obj"]["name"]:
@@ -766,6 +831,7 @@ def compute_stats(header, objects, filename, filepath, tree):
     def analyze_shape(node):
         o = node["obj"]
         clips = 0
+        clip_render_pts = 0
         paths = []
         vertices = 0
         render_points = 0
@@ -795,22 +861,54 @@ def compute_stats(header, objects, filename, filepath, tree):
                 paints.append({"paint": paint_type, "color": color_type, "stops": stops})
             elif tn == "ClippingShape":
                 clips += 1
+                # Resolve sourceId to calculate clip path render points
+                src_id = get_prop(co, "sourceId")
+                if src_id is not None:
+                    ab = _obj_to_ab.get(o["index"])
+                    if ab is not None:
+                        src_obj = ab_comp_maps.get(ab, {}).get(src_id)
+                        if src_obj:
+                            src_node = node_by_index.get(src_obj["index"])
+                            if src_node:
+                                clip_render_pts += calc_clip_render_pts(src_node)
             elif tn in path_types_param:
                 # Estimate RenderPath point count (what actually gets submitted to GPU)
-                # CubicVertex paths: moveTo(1) + N*cubicTo(3) = 1+3N
-                # StraightVertex paths: moveTo(1) + (N-1)*lineTo(1) = N
+                # Based on rive-runtime Path::buildPath() in src/shapes/path.cpp:
+                #   CubicVertex: cubicTo(3 pts)
+                #   StraightVertex no radius: lineTo(1 pt)
+                #   StraightVertex with radius: lineTo(1) + cubicTo(3) = 4 pts
+                # First vertex: moveTo(1) instead of lineTo; close adds line(1) or cubic(3)
+                #
+                # Ellipse: 4 CubicVertex → move(1)+3*cubic(3)+close_cubic(3) = 13
+                # Rectangle no radius: 4 StraightVertex → move(1)+3*line(1) = 4 (close line ignored)
+                # Rectangle with radius: each corner → line(1)+cubic(3)=4, first → move(1)+cubic(3)=4
+                #   4*4 = 16 (close line ignored)
+                # Polygon/Star: same logic, cornerRadius applies to all vertices
                 if tn == "Ellipse":
                     ctrl_v, render_pts = 4, 13  # 4 CubicVertex → moveTo+4*cubicTo = 1+12
                 elif tn == "Rectangle":
-                    ctrl_v, render_pts = 4, 4   # 4 StraightVertex → 4 points (no radius)
+                    # rectangle.cpp: 4 StraightVertex, each with radius from cornerRadiusTL/TR/BL/BR
+                    cr = get_prop(co, "cornerRadiusTL") or get_prop(co, "cornerRadiusTR") or \
+                         get_prop(co, "cornerRadiusBL") or get_prop(co, "cornerRadiusBR") or \
+                         get_prop(co, "cornerRadius")
+                    if cr:
+                        ctrl_v, render_pts = 4, 4 * 4  # each vertex: line+cubic=4 pts
+                    else:
+                        ctrl_v, render_pts = 4, 4
                 elif tn == "Triangle":
                     ctrl_v, render_pts = 3, 3
                 elif tn == "Polygon":
+                    # polygon.cpp: each vertex gets cornerRadius()
                     n = get_prop(co, "points") or 5
-                    ctrl_v, render_pts = n, n
+                    cr = get_prop(co, "cornerRadius")
+                    ctrl_v = n
+                    render_pts = n * 4 if cr else n
                 elif tn == "Star":
+                    # star.cpp: each vertex (2*points) gets cornerRadius()
                     n = (get_prop(co, "points") or 5) * 2
-                    ctrl_v, render_pts = n, n
+                    cr = get_prop(co, "cornerRadius")
+                    ctrl_v = n
+                    render_pts = n * 4 if cr else n
                 else:
                     ctrl_v, render_pts = 4, 4
                 paths.append({"type": tn, "mode": "param", "vertices": ctrl_v, "renderPts": render_pts})
@@ -825,6 +923,8 @@ def compute_stats(header, objects, filename, filepath, tree):
                         vcount += 1
                         if vtn in ("CubicDetachedVertex", "CubicAsymmetricVertex", "CubicMirroredVertex"):
                             rpts += 3  # cubicTo
+                        elif vtn == "StraightVertex" and get_prop(vc["obj"], "radius"):
+                            rpts += 4  # rounded corner: lineTo(1) + cubicTo(3)
                         else:
                             rpts += 1  # lineTo (StraightVertex)
                 paths.append({"type": tn, "mode": "free", "vertices": vcount, "renderPts": rpts})
@@ -848,7 +948,7 @@ def compute_stats(header, objects, filename, filepath, tree):
 
         return {
             "index": o["index"], "name": resolve_name(node),
-            "draws": draws, "clips": clips, "paths": paths,
+            "draws": draws, "clips": clips, "clipRenderPoints": clip_render_pts, "paths": paths,
             "vertices": vertices, "renderPoints": render_points, "colors": colors,
             "meshes": meshes, "bones": bones, "images": images,
             "paints": paints,
@@ -869,20 +969,32 @@ def compute_stats(header, objects, filename, filepath, tree):
 
     # Also scan for standalone Image/Mesh/Bone (not inside Shape)
     standalone_images, standalone_meshes, standalone_bones = 0, 0, 0
+    standalone_clips, standalone_clip_render_pts = 0, 0
     def walk_standalone(node):
-        nonlocal standalone_images, standalone_meshes, standalone_bones
+        nonlocal standalone_images, standalone_meshes, standalone_bones, standalone_clips, standalone_clip_render_pts
         tn = node["obj"]["typeName"]
         if tn == "Shape": return  # already counted
         if tn == "Image": standalone_images += 1
         if tn == "Mesh": standalone_meshes += 1
         if tn in ("Bone", "RootBone"): standalone_bones += 1
+        if tn == "ClippingShape":
+            standalone_clips += 1
+            src_id = get_prop(node["obj"], "sourceId")
+            if src_id is not None:
+                ab = _obj_to_ab.get(node["obj"]["index"])
+                if ab is not None:
+                    src_obj = ab_comp_maps.get(ab, {}).get(src_id)
+                    if src_obj:
+                        src_node = node_by_index.get(src_obj["index"])
+                        if src_node:
+                            standalone_clip_render_pts += calc_clip_render_pts(src_node)
         for c in node["children"]: walk_standalone(c)
     for r in tree: walk_standalone(r)
 
     # Sort by draw calls descending
     shape_costs.sort(key=lambda s: s["draws"] + s["clips"]*2, reverse=True)
     total_draws = sum(s["draws"] for s in shape_costs) + artboard_fills
-    total_clips = sum(s["clips"] for s in shape_costs)
+    total_clips = sum(s["clips"] for s in shape_costs) + standalone_clips
     total_meshes = sum(s["meshes"] for s in shape_costs) + standalone_meshes
     total_bones = sum(s["bones"] for s in shape_costs) + standalone_bones
     total_images = sum(s["images"] for s in shape_costs) + standalone_images
@@ -893,16 +1005,8 @@ def compute_stats(header, objects, filename, filepath, tree):
     # ── Animation per-frame analysis ──
     # Properties that trigger path recomputation
     path_props = {20,21,24,25,26,31,79,80,81,82,83,84,85,86,87,110,125,126,127,161,162,163}  # width,height,vertex coords,radius,etc
-    # Build artboard component index map for resolving objectId
-    artboard_comp_maps = {}
-    current_ab = None; comp_counter = 0
-    for o in objects:
-        if o["typeName"] == "Artboard":
-            current_ab = o["index"]; artboard_comp_maps[current_ab] = {0: o}; comp_counter = 1
-        elif current_ab is not None and o["parentId"] is not None:
-            artboard_comp_maps[current_ab][comp_counter] = o; comp_counter += 1
-        elif current_ab is not None and o["parentId"] is None and o["typeName"] != "Artboard":
-            pass
+    # Reuse ab_comp_maps built earlier for resolving objectId
+    artboard_comp_maps = ab_comp_maps
 
     anim_analysis = []
     for o in objects:
@@ -982,8 +1086,9 @@ def compute_stats(header, objects, filename, filepath, tree):
     total_gradient_stops = 0
     for sc in shape_costs:
         total_path_count += len(sc["paths"])
-        total_path_verts += sc["vertices"]
-        total_render_pts += sc.get("renderPoints", 0)
+        n_paints = max(len(sc.get("paints", [])), 1)
+        total_path_verts += sc["vertices"] * n_paints
+        total_render_pts += sc.get("renderPoints", 0) * n_paints
         for p in sc.get("paints", []):
             key = f"{p['paint']}+{p['color']}"
             paint_breakdown[key] += 1
@@ -995,9 +1100,73 @@ def compute_stats(header, objects, filename, filepath, tree):
     total_path_count += artboard_fills
     total_render_pts += artboard_fills * 4  # rect = 4 points
 
+    total_clip_render_pts = sum(s.get("clipRenderPoints", 0) for s in shape_costs) + standalone_clip_render_pts
+
+    # ── Feather analysis ──
+    # Feather is child of Fill/Stroke, which is child of Shape
+    feather_details = []
+    shape_cost_map = {sc["index"]: sc for sc in shape_costs}
+
+    def calc_path_bounds(shape_node):
+        """Calculate bounding box of all paths under a Shape (local coords)."""
+        min_x = min_y = float('inf')
+        max_x = max_y = float('-inf')
+        for c in shape_node["children"]:
+            tn = c["obj"]["typeName"]
+            if tn in path_types_param:
+                w = get_prop(c["obj"], "width") or 0
+                h = get_prop(c["obj"], "height") or 0
+                if w or h:
+                    min_x = min(min_x, 0); min_y = min(min_y, 0)
+                    max_x = max(max_x, w); max_y = max(max_y, h)
+            elif tn in path_types_free:
+                for vc in c["children"]:
+                    if vc["obj"]["typeName"] in vertex_types:
+                        vx = get_prop(vc["obj"], "x") or 0
+                        vy = get_prop(vc["obj"], "y") or 0
+                        min_x = min(min_x, vx); max_x = max(max_x, vx)
+                        min_y = min(min_y, vy); max_y = max(max_y, vy)
+        if min_x == float('inf'):
+            return 0, 0
+        return max_x - min_x, max_y - min_y
+
+    def walk_feather(node, shape_node=None, paint_node=None):
+        tn = node["obj"]["typeName"]
+        if tn == "Shape":
+            shape_node = node
+        elif tn in ("Fill", "Stroke"):
+            paint_node = node
+        elif tn == "Feather" and shape_node:
+            sc = shape_cost_map.get(shape_node["obj"]["index"], {})
+            pw, ph = calc_path_bounds(shape_node)
+            feather_details.append({
+                "shapeName": shape_node["obj"]["name"] or sc.get("name", ""),
+                "shapeIndex": shape_node["obj"]["index"],
+                "paintType": paint_node["obj"]["typeName"] if paint_node else "?",
+                "strength": get_prop(node["obj"], "strength") or 12.0,
+                "inner": get_prop(node["obj"], "inner") or False,
+                "paths": len(sc.get("paths", [])),
+                "renderPoints": sc.get("renderPoints", 0),
+                "pathWidth": round(pw, 1),
+                "pathHeight": round(ph, 1),
+            })
+        for c in node["children"]:
+            walk_feather(c, shape_node, paint_node)
+    for r in tree: walk_feather(r)
+
+    # Feather warnings
+    if feather_details:
+        n_feathers = len(feather_details)
+        n_inner = sum(1 for f in feather_details if f["inner"])
+        high_str = [f for f in feather_details if f["strength"] > 50]
+        if n_feathers > 20: warnings.append(f"Feather 较多 ({n_feathers})，模糊渲染开销大")
+        if high_str: warnings.append(f"存在高 strength Feather ({len(high_str)} 个 >50)，GPU 模糊开销大")
+        if n_inner > 10: warnings.append(f"Inner Feather 较多 ({n_inner})，需额外构建反向路径")
+
     render_detail = {
         "drawPath": total_draws,
         "clipPath": total_clips,
+        "clipRenderPoints": total_clip_render_pts,
         "drawImage": total_images,
         "drawImageMesh": total_meshes,
         "totalCalls": total_draws + total_clips + total_images + total_meshes,
@@ -1057,6 +1226,7 @@ def compute_stats(header, objects, filename, filepath, tree):
         "renderDetail": render_detail,
         "meshDetail": {"count": total_meshes, "meshVertices": mesh_verts, "textures": texture_info},
         "imageDetail": image_draws,
+        "featherDetail": feather_details,
         "summary": {
             "totalDraws": total_draws, "totalClips": total_clips,
             "totalMeshes": total_meshes, "totalBones": total_bones,
@@ -1120,6 +1290,9 @@ def dump_stats(header, objects, filename, filepath, output=None):
     out.write(f"\n── 渲染调用明细 ──\n")
     out.write(f"  drawPath: {rd['drawPath']}  clipPath: {rd['clipPath']}  drawImage: {rd['drawImage']}  drawImageMesh: {rd['drawImageMesh']}  总计: {rd['totalCalls']}\n")
     out.write(f"  路径总数: {rd['totalPaths']}  控制顶点: {rd['totalVertices']}  渲染点数: {rd['totalRenderPoints']}  渐变色标: {rd['totalGradientStops']}\n")
+    clip_rp = rd.get("clipRenderPoints", 0)
+    if clip_rp:
+        out.write(f"  Clip 渲染点数: {clip_rp}\n")
     pb = rd["paintBreakdown"]
     pv = rd["paintVertices"]
     pr = rd.get("paintRenderPts", {})
@@ -1148,6 +1321,39 @@ def dump_stats(header, objects, filename, filepath, output=None):
         out.write(f"  Mesh 数量: {md['count']}  Mesh 顶点: {md['meshVertices']}  纹理: {len(md['textures'])}\n")
         for t in md["textures"]:
             out.write(f"    纹理: {t['name']} ({int(t.get('width',0))}×{int(t.get('height',0))})\n")
+
+    # Feather detail
+    feathers = s.get("featherDetail", [])
+    if feathers:
+        n_inner = sum(1 for f in feathers if f["inner"])
+        max_str = max(f["strength"] for f in feathers)
+        # Blur cost ≈ (w + str*3) * (h + str*3) pixels; inner doubles path work
+        for f in feathers:
+            w, h, st = f["pathWidth"], f["pathHeight"], f["strength"]
+            f["_blurArea"] = (w + st * 3) * (h + st * 3) if (w or h) else 0
+        total_blur = sum(f["_blurArea"] for f in feathers)
+        # Deduplicate by shape for summary
+        shape_set = set()
+        for f in feathers:
+            shape_set.add(f["shapeIndex"])
+
+        out.write(f"\n── Feather 羽化 ({len(feathers)} 个, {len(shape_set)} 个 Shape) ──\n")
+        out.write(f"  inner: {n_inner}  最大 strength: {max_str:.1f}\n")
+
+        # Sort by blur area descending, show top heavy ones
+        heavy = sorted(feathers, key=lambda f: f["_blurArea"], reverse=True)
+        # Show top 10 or those with strength > 50
+        top = [f for f in heavy if f["strength"] > 50 or f["_blurArea"] > 500000]
+        if not top:
+            top = heavy[:5]
+        else:
+            top = top[:10]
+        if top:
+            out.write(f"\n  🔥 高开销 Feather (strength>50 或模糊面积大):\n")
+            for f in top:
+                inner_str = " [inner]" if f["inner"] else ""
+                size_str = f"{f['pathWidth']}×{f['pathHeight']}" if f["pathWidth"] or f["pathHeight"] else "?"
+                out.write(f"  #{f['shapeIndex']} {f['shapeName'] or 'unnamed'} → {f['paintType']}{inner_str}  str={f['strength']:.0f}  size={size_str}  pts={f['renderPoints']}\n")
 
     # Animation summary: aggregate, only show problematic ones in detail
     anims = s["animAnalysis"]
