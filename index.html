@@ -561,6 +561,16 @@ function computeStats(header, objects, tree, fileSize) {
 
   const meshVerts=countType('MeshVertex','ContourMeshVertex');
 
+  // Font/Audio/Text detail
+  const fontDetail=[];
+  for(const o of objects){if(o.typeName==='FontAsset'){const nd=nodeByIdx[o.index];let sz=0;if(nd)for(const c of nd.children)if(c.obj.typeName==='FileAssetContents')for(const p of c.obj.properties)if(propName(p.key)==='bytes'&&p.type===4)sz=p.size||0;fontDetail.push({name:o.name||'unnamed',index:o.index,size:sz});}}
+  const audioDetail=[];
+  for(const o of objects){if(o.typeName==='AudioAsset'){const nd=nodeByIdx[o.index];let sz=0;if(nd)for(const c of nd.children)if(c.obj.typeName==='FileAssetContents')for(const p of c.obj.properties)if(propName(p.key)==='bytes'&&p.type===4)sz=p.size||0;audioDetail.push({name:o.name||'unnamed',index:o.index,size:sz});}}
+  const textCount=countType('Text');
+  const audioEventCount=countType('AudioEvent');
+  const textDetail=[];
+  for(const o of objects){if(o.typeName==='Text'){const nd=nodeByIdx[o.index];let runs=[];if(nd)for(const c of nd.children)if(c.obj.typeName==='TextValueRun'){const tx=gp(c.obj,'text');if(tx)runs.push(tx);}textDetail.push({name:o.name||'',index:o.index,text:runs.join('')});}}
+
   // Animation analysis
   const pathProps=new Set([20,21,24,25,26,31,79,80,81,82,83,84,85,86,87,110,125,126,127,161,162,163]);
   // Reuse abCompMaps, objToAb built earlier for ClippingShape resolution
@@ -623,6 +633,7 @@ function computeStats(header, objects, tree, fileSize) {
     featherDetail,
     summary:{totalDraws,totalClips,totalMeshes,totalBones,totalImages,artboardFills,drawDist,score},
     animAnalysis,stateMachine:smData,hierarchy:{maxDepth},distribution:catCounts,warnings,
+    assets:{fonts:fontDetail,audio:audioDetail,text:textDetail,audioEventCount},
   };
 }
 
@@ -817,8 +828,9 @@ const I18N = {
     clickNode:'点击节点查看属性',filterProps:'过滤属性...',focusSub:'聚焦子树',expandKids:'展开子节点',collapseKids:'折叠子节点',showAll:'显示全部',
     propPerFrame:'属性/帧',recalc:'次重算',draws:'draws',unknown:'未知',total:'共',times:'次',frame:'帧',renderPtsUnit:'渲染点',timesUnit:'次',alertBadFile:'请选择 .riv 文件',alertParseFail:'解析失败: ',
     clipRenderPts:'Clip 渲染点数',featherTitle:'Feather 羽化',featherInner:'inner',featherMaxStr:'最大 strength',featherHeavy:'🔥 高开销',
+    fontTitle:'🔤 Font 字体',audioTitle:'🔊 Audio 音频',textTitle:'📝 Text 文本',audioEvents:'AudioEvent',cdn:'(CDN)',
     dlgShapeTitle:'热点 Shape',dlgFeatherTitle:'Feather 羽化',dlgImageTitle:'Image 纹理',dlgAnimTitle:'动画',
-    thName:'名称',thPath:'路径',thVerts:'顶点',thRenderPts:'渲染点',thColor:'颜色',thSize:'尺寸',thType:'类型',thFps:'fps',thFrames:'帧数',thLoop:'循环',thPropsFrame:'属性/帧',thPathRecalc:'路径重算',thBlurArea:'模糊面积',thPathSize:'路径尺寸',
+    thName:'名称',thPath:'路径',thVerts:'顶点',thRenderPts:'渲染点',thColor:'颜色',thSize:'尺寸',thType:'类型',thFps:'fps',thFrames:'帧数',thLoop:'循环',thPropsFrame:'属性/帧',thPathRecalc:'路径重算',thBlurArea:'模糊面积',thPathSize:'路径尺寸',thContent:'内容',
     warnVertices:'顶点数较多',warnDrawCalls:'Draw calls 较多',warnClips:'裁剪较多',warnMesh:'Mesh 较多',warnAssets:'内嵌资源较大',warnDepth:'层级较深',warnPathRecalc:'存在动画触发路径重算',warnFeatherMany:'Feather 较多',warnFeatherStr:'存在高 strength Feather',warnFeatherInner:'Inner Feather 较多',
   },
   en: {
@@ -835,8 +847,9 @@ const I18N = {
     clickNode:'Click a node to inspect',filterProps:'Filter properties...',focusSub:'Focus subtree',expandKids:'Expand children',collapseKids:'Collapse children',showAll:'Show all',
     propPerFrame:'props/frame',recalc:' recalcs',draws:'draws',unknown:'unknown',total:'total',times:'x',frame:'frame',renderPtsUnit:'render pts',timesUnit:'x',alertBadFile:'Please select a .riv file',alertParseFail:'Parse error: ',
     clipRenderPts:'Clip Render Points',featherTitle:'Feather',featherInner:'inner',featherMaxStr:'Max strength',featherHeavy:'🔥 Heavy',
+    fontTitle:'🔤 Fonts',audioTitle:'🔊 Audio',textTitle:'📝 Text',audioEvents:'AudioEvent',cdn:'(CDN)',
     dlgShapeTitle:'Hot Shapes',dlgFeatherTitle:'Feather',dlgImageTitle:'Image Textures',dlgAnimTitle:'Animation',
-    thName:'Name',thPath:'Path',thVerts:'Verts',thRenderPts:'Render Pts',thColor:'Color',thSize:'Size',thType:'Type',thFps:'fps',thFrames:'Frames',thLoop:'Loop',thPropsFrame:'Props/Frame',thPathRecalc:'Path Recalc',thBlurArea:'Blur Area',thPathSize:'Path Size',
+    thName:'Name',thPath:'Path',thVerts:'Verts',thRenderPts:'Render Pts',thColor:'Color',thSize:'Size',thType:'Type',thFps:'fps',thFrames:'Frames',thLoop:'Loop',thPropsFrame:'Props/Frame',thPathRecalc:'Path Recalc',thBlurArea:'Blur Area',thPathSize:'Path Size',thContent:'Content',
     warnVertices:'Too many vertices',warnDrawCalls:'Too many draw calls',warnClips:'Too many clips',warnMesh:'Too many meshes',warnAssets:'Large embedded assets',warnDepth:'Deep hierarchy',warnPathRecalc:'Animation triggers path recalc',warnFeatherMany:'Too many feathers',warnFeatherStr:'High strength feather',warnFeatherInner:'Too many inner feathers',
   }
 };
@@ -1022,6 +1035,31 @@ function showAnimDetail() {
   showDetail(t('dlgAnimTitle')+' ('+anims.length+')', h);
 }
 
+function showFontDetail() {
+  const fonts=(currentData.stats.assets||{}).fonts||[];
+  let h='<table><tr><th>#</th><th>'+t('thName')+'</th><th>'+t('thSize')+'</th></tr>';
+  for(const f of fonts){const sz=f.size?(f.size/1024).toFixed(1)+' KB':t('cdn');h+='<tr><td>'+f.index+'</td><td>'+esc(f.name)+'</td><td>'+sz+'</td></tr>';}
+  h+='</table>';
+  showDetail(t('fontTitle')+' ('+fonts.length+')', h);
+}
+
+function showAudioDetail() {
+  const ast=currentData.stats.assets||{},audios=ast.audio||[];
+  let h='<table><tr><th>#</th><th>'+t('thName')+'</th><th>'+t('thSize')+'</th></tr>';
+  for(const a of audios){const sz=a.size?(a.size/1024).toFixed(1)+' KB':t('cdn');h+='<tr><td>'+a.index+'</td><td>'+esc(a.name)+'</td><td>'+sz+'</td></tr>';}
+  h+='</table>';
+  if(ast.audioEventCount) h+='<div style="margin-top:8px">AudioEvent: '+ast.audioEventCount+'</div>';
+  showDetail(t('audioTitle')+' ('+audios.length+')', h);
+}
+
+function showTextDetail() {
+  const texts=(currentData.stats.assets||{}).text||[];
+  let h='<table><tr><th>#</th><th>'+t('thName')+'</th><th style="max-width:400px">'+t('thContent')+'</th></tr>';
+  for(const tx of texts){const c=esc(tx.text.replace(/\n/g,'\\n'));h+='<tr><td>'+tx.index+'</td><td>'+esc(tx.name||'')+'</td><td style="max-width:400px;word-break:break-all">'+c+'</td></tr>';}
+  h+='</table>';
+  showDetail(t('textTitle')+' ('+texts.length+')', h);
+}
+
 function renderStatsView() {
   const container = document.getElementById('tab-stats');
   const s = currentData.stats;
@@ -1069,6 +1107,10 @@ function renderStatsView() {
   // Image
   if(s.imageDetail.length){h+='<div class="stsec"><h3 class="clickable-header" onclick="showImageDetail()">'+t('imgTex')+' ('+s.imageDetail.length+')</h3>';for(const img of s.imageDetail){const sz=img.width?Math.round(img.width)+'×'+Math.round(img.height):t('unknown');h+='<div class="strow hot"><span class="sk">'+esc(img.name)+'</span><span class="sv">'+sz+' '+(img.hasMesh?'drawImageMesh':'drawImage')+'</span></div>'}h+='</div>'}
   if(s.meshDetail.count){h+='<div class="stsec"><h3>'+t('meshDeform')+'</h3>';h+=sr(t('meshCount'),s.meshDetail.count);h+=sr(t('meshVerts'),s.meshDetail.meshVertices);for(const t of s.meshDetail.textures)h+=sr(t.name,(t.width?Math.round(t.width)+'×'+Math.round(t.height):''));h+='</div>'}
+  const ast=s.assets||{};
+  if(ast.fonts&&ast.fonts.length){h+='<div class="stsec"><h3 class="clickable-header" onclick="showFontDetail()">'+t('fontTitle')+' ('+ast.fonts.length+')</h3>';for(const f of ast.fonts){const sz=f.size?(f.size/1024).toFixed(1)+'KB':t('cdn');h+=sr(f.name,sz);}h+='</div>'}
+  if(ast.audio&&ast.audio.length){h+='<div class="stsec"><h3 class="clickable-header" onclick="showAudioDetail()">'+t('audioTitle')+' ('+ast.audio.length+(ast.audioEventCount?', '+ast.audioEventCount+' '+t('audioEvents'):'')+')</h3>';for(const a of ast.audio){const sz=a.size?(a.size/1024).toFixed(1)+'KB':t('cdn');h+=sr(a.name,sz);}h+='</div>'}
+  if(ast.text&&ast.text.length){h+='<div class="stsec"><h3 class="clickable-header" onclick="showTextDetail()">'+t('textTitle')+' ('+ast.text.length+')</h3>';for(const tx of ast.text.slice(0,5)){const c=tx.text.length>40?tx.text.slice(0,40)+'...':tx.text;h+=sr(tx.name||'#'+tx.index,'"'+esc(c.replace(/\n/g,'\\n'))+'"');}if(ast.text.length>5)h+='<div style="color:#565f89;font-size:11px">... '+t('total')+' '+ast.text.length+'</div>';h+='</div>'}
   if(s.featherDetail&&s.featherDetail.length){const fd=s.featherDetail,ni=fd.filter(f=>f.inner).length,ms=Math.max(...fd.map(f=>f.strength));const shapes=new Set(fd.map(f=>f.shapeIndex));h+='<div class="stsec"><h3 class="clickable-header" onclick="showFeatherDetail()">'+t('featherTitle')+' ('+fd.length+', '+shapes.size+' Shape)</h3>';h+=sr(t('featherInner'),ni);h+=sr(t('featherMaxStr'),ms.toFixed(1));const heavy=fd.filter(f=>f.strength>50||(f.pathWidth+f.strength*3)*(f.pathHeight+f.strength*3)>500000).sort((a,b)=>{const ca=(a.pathWidth+a.strength*3)*(a.pathHeight+a.strength*3),cb=(b.pathWidth+b.strength*3)*(b.pathHeight+b.strength*3);return cb-ca;});const show=heavy.length?heavy.slice(0,5):fd.slice().sort((a,b)=>b.strength-a.strength).slice(0,5);if(show.length){h+='<div style="margin-top:6px;font-size:12px;color:#f7768e">'+t('featherHeavy')+':</div>';for(const f of show){const sz=f.pathWidth||f.pathHeight?f.pathWidth+'×'+f.pathHeight:'?';h+='<div class="strow hot"><span class="sk">#'+f.shapeIndex+' '+esc(f.shapeName||'unnamed')+'</span><span class="sv">'+esc(f.paintType)+(f.inner?' [inner]':'')+' str='+f.strength.toFixed(0)+' size='+sz+' pts='+f.renderPoints+'</span></div>'}}h+='</div>'}
 
   h+='</div>'; // end left

@@ -813,6 +813,25 @@ function renderStats(){{
     h+='</div>';
   }}
 
+  // Font/Audio/Text
+  const ast=s.assets||{{}};
+  if(ast.fonts&&ast.fonts.length){{
+    h+='<div class="stat-section"><h3>\U0001f524 Font ('+ast.fonts.length+')</h3>';
+    for(const f of ast.fonts){{const sz=f.size?(f.size/1024).toFixed(1)+'KB':'(CDN)';h+=sr(f.name,sz);}}
+    h+='</div>';
+  }}
+  if(ast.audio&&ast.audio.length){{
+    h+='<div class="stat-section"><h3>\U0001f50a Audio ('+ast.audio.length+(ast.audioEventCount?', '+ast.audioEventCount+' AudioEvent':'')+')</h3>';
+    for(const a of ast.audio){{const sz=a.size?(a.size/1024).toFixed(1)+'KB':'(CDN)';h+=sr(a.name,sz);}}
+    h+='</div>';
+  }}
+  const texts=ast.text||[];
+  if(texts.length){{
+    h+='<div class="stat-section"><h3>\U0001f4dd Text ('+texts.length+')</h3>';
+    for(const tx of texts){{const c=tx.text.length>50?tx.text.slice(0,50)+'...':tx.text;h+=sr(tx.name||'#'+tx.index,'"'+c.replace(/\\n/g,'\\\\n')+'"');}}
+    h+='</div>';
+  }}
+
   // Feather
   const feathers=s.featherDetail||[];
   if(feathers.length){{

@@ -1057,8 +1057,49 @@ def compute_stats(header, objects, filename, filepath, tree):
     cat_counts = dict(Counter(o["category"] for o in objects).most_common())
 
     img_assets = [o["name"] or "unnamed" for o in objects if o["typeName"] == "ImageAsset"]
-    font_assets = [o["name"] or "unnamed" for o in objects if o["typeName"] == "FontAsset"]
-    audio_assets = [o["name"] or "unnamed" for o in objects if o["typeName"] == "AudioAsset"]
+    # Font assets with embedded size
+    font_detail = []
+    for o in objects:
+        if o["typeName"] == "FontAsset":
+            name = o["name"] or "unnamed"
+            # Find embedded FileAssetContents child size
+            node = node_by_index.get(o["index"])
+            size = 0
+            if node:
+                for c in node["children"]:
+                    if c["obj"]["typeName"] == "FileAssetContents":
+                        for p in c["obj"]["properties"]:
+                            if prop_name(p["key"]) == "bytes" and p["type"] == 4:
+                                size = p.get("size", 0)
+            font_detail.append({"name": name, "index": o["index"], "size": size})
+    # Audio assets with embedded size
+    audio_detail = []
+    for o in objects:
+        if o["typeName"] == "AudioAsset":
+            name = o["name"] or "unnamed"
+            node = node_by_index.get(o["index"])
+            size = 0
+            if node:
+                for c in node["children"]:
+                    if c["obj"]["typeName"] == "FileAssetContents":
+                        for p in c["obj"]["properties"]:
+                            if prop_name(p["key"]) == "bytes" and p["type"] == 4:
+                                size = p.get("size", 0)
+            audio_detail.append({"name": name, "index": o["index"], "size": size})
+    n_text = count_type("Text")
+    n_audio_events = count_type("AudioEvent")
+    # Text detail: collect text content from TextValueRun children
+    text_detail = []
+    for o in objects:
+        if o["typeName"] == "Text":
+            node = node_by_index.get(o["index"])
+            runs = []
+            if node:
+                for c in node["children"]:
+                    if c["obj"]["typeName"] == "TextValueRun":
+                        txt = get_prop(c["obj"], "text")
+                        if txt: runs.append(txt)
+            text_detail.append({"name": o["name"] or "", "index": o["index"], "text": "".join(runs)})
 
     # Warnings
     warnings = []
@@ -1238,7 +1279,7 @@ def compute_stats(header, objects, filename, filepath, tree):
                           "transitions": n_trans, "conditions": n_cond, "inputs": n_inputs, "listeners": n_listeners},
         "hierarchy": {"maxDepth": max_depth},
         "distribution": cat_counts,
-        "assets": {"images": img_assets, "fonts": font_assets, "audio": audio_assets},
+        "assets": {"images": img_assets, "fonts": font_detail, "audio": audio_detail, "text": text_detail, "audioEventCount": n_audio_events},
         "warnings": warnings,
     }
 
@@ -1321,6 +1362,34 @@ def dump_stats(header, objects, filename, filepath, output=None):
         out.write(f"  Mesh 数量: {md['count']}  Mesh 顶点: {md['meshVertices']}  纹理: {len(md['textures'])}\n")
         for t in md["textures"]:
             out.write(f"    纹理: {t['name']} ({int(t.get('width',0))}×{int(t.get('height',0))})\n")
+
+    # Font detail
+    assets = s.get("assets", {})
+    fonts = assets.get("fonts", [])
+    if fonts:
+        out.write(f"\n── Font 字体 ({len(fonts)} 个) ──\n")
+        for f in fonts:
+            size_str = f"  {f['size']/1024:.1f}KB" if f["size"] else "  (CDN)"
+            out.write(f"  {f['name']}{size_str}\n")
+
+    # Audio detail
+    audios = assets.get("audio", [])
+    if audios:
+        n_events = assets.get("audioEventCount", 0)
+        out.write(f"\n── Audio 音频 ({len(audios)} 个, {n_events} 个 AudioEvent) ──\n")
+        for a in audios:
+            size_str = f"  {a['size']/1024:.1f}KB" if a["size"] else "  (CDN)"
+            out.write(f"  {a['name']}{size_str}\n")
+
+    # Text
+    texts = assets.get("text", [])
+    if texts:
+        out.write(f"\n── Text 文本 ({len(texts)} 个) ──\n")
+        for tx in texts:
+            content = tx["text"][:60] + "..." if len(tx["text"]) > 60 else tx["text"]
+            content = content.replace("\n", "\\n")
+            name = tx["name"] or f"#{tx['index']}"
+            out.write(f"  {name}: \"{content}\"\n")
 
     # Feather detail
     feathers = s.get("featherDetail", [])
