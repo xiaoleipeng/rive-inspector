@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.kiro/
+.marscode/
+*.riv
+!examples/*.riv
+*.patch
+.DS_Store

@@ -9,8 +9,8 @@ A toolkit for parsing, visualizing, and profiling Rive (.riv) files. Available a
 - **Text Tree** — Indented tree view of the full object hierarchy, property values, and cross-references
 - **HTML List** — Interactive HTML page with expand/collapse, search filtering, and category filtering
 - **Graph Visualization** — Canvas-based interactive node graph with pan/zoom, drag, context menu, and property panel
-- **Performance Stats** — Rendering complexity score, draw call analysis, animation/state machine metrics, and warnings
-- **Web Inspector** — Standalone browser-based .riv analyzer (drag & drop, no Python required)
+- **Performance Stats** — Rendering complexity score, draw call analysis, Feather/Clip/Mesh analysis, animation/state machine metrics, and warnings
+- **Web Inspector** — Standalone browser-based .riv analyzer (drag & drop, no Python required, bilingual zh/en)
 
 ## Requirements
 
@@ -38,13 +38,9 @@ python3 dump_riv.py --help
 
 ### Web Inspector (Browser)
 
-Open `rive-inspector.html` in a browser and drag & drop a .riv file to analyze it. Includes tree view, stats charts, and graph visualization tabs.
+Open `index.html` in a browser and drag & drop a .riv file to analyze it. Includes tree view, stats, graph visualization, and export tabs. Supports Chinese/English switching.
 
-Rebuild:
-
-```bash
-python3 build_inspector.py
-```
+<img width="1265" height="562" alt="Graph View" src="https://github.com/user-attachments/assets/f3b4486c-c917-40fa-b345-ad099483b160" />
 
 ## Output Modes
 
@@ -76,26 +72,30 @@ Canvas node graph with:
 - Cross-reference visualization (orange dashed lines)
 - 📊 Stats button for graphical statistics
 
-<img width="1265" height="562" alt="image" src="https://github.com/user-attachments/assets/f3b4486c-c917-40fa-b345-ad099483b160" />
-
 ### Performance Stats (`--stats`)
 
-Outputs rendering score (1–5 stars), per-frame rendering cost, hot Shapes, Image textures, Mesh deformation, animation complexity, State Machine metrics, and performance warnings.
+Outputs rendering score (1–5 stars), per-frame rendering cost, hot Shapes, Image textures, Mesh deformation, Feather blur analysis, Font/Audio/Text assets, animation complexity, State Machine metrics, and performance warnings.
 
-<img width="1852" height="693" alt="image" src="https://github.com/user-attachments/assets/ea082f4c-b1a8-4e97-8a8a-f785d5febd47" />
+<img width="1852" height="693" alt="Stats View" src="https://github.com/user-attachments/assets/ea082f4c-b1a8-4e97-8a8a-f785d5febd47" />
 
-## Files
+## Project Structure
 
-| File | Description |
-|------|-------------|
-| `dump_riv.py` | Main script: .riv parser, tree builder, text/HTML/stats output |
-| `riv_graph.py` | Canvas graph visualization and stats chart HTML generator |
-| `riv_schema.json` | Type and property name mappings extracted from rive-runtime source |
-| `build_inspector.py` | Build script for `rive-inspector.html` |
-| `rive-inspector.html` | Standalone browser-based .riv analyzer (build artifact) |
-| `RIV_FORMAT.md` | Rive .riv binary format technical documentation |
-| `PERFORMANCE_GUIDE.md` | Performance analysis guide: metrics, thresholds, optimization tips |
-| `USAGE.md` | Detailed usage instructions |
+```
+rive-inspector/
+├── dump_riv.py          # CLI: .riv parser, tree builder, text/HTML/stats output
+├── riv_graph.py         # CLI: Canvas graph visualization and stats chart generator
+├── riv_schema.json      # Type and property name mappings (from rive-runtime source)
+├── index.html           # Web Inspector: standalone browser-based .riv analyzer
+├── docs/
+│   ├── RIV_FORMAT.md    # .riv binary format specification
+│   ├── USAGE.md         # Detailed CLI usage instructions
+│   ├── PERFORMANCE_GUIDE.md  # Performance metrics and optimization guide
+│   └── PREVIEW_FEASIBILITY.md  # Rive preview integration feasibility report
+├── examples/
+│   └── clip.riv         # Sample .riv file for testing
+├── LICENSE
+└── README.md
+```
 
 ## Typical Workflow
 
@@ -114,6 +114,10 @@ diff before.txt after.txt
 
 ## Documentation
 
-- [USAGE.md](USAGE.md) — Full usage instructions and output examples
-- [PERFORMANCE_GUIDE.md](PERFORMANCE_GUIDE.md) — Performance metrics explained with optimization checklist
-- [RIV_FORMAT.md](RIV_FORMAT.md) — .riv binary format specification
+- [docs/USAGE.md](docs/USAGE.md) — Full CLI usage instructions and output examples
+- [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md) — Performance metrics explained with optimization checklist
+- [docs/RIV_FORMAT.md](docs/RIV_FORMAT.md) — .riv binary format specification
+
+## License
+
+[MIT](LICENSE)
