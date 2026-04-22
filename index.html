@@ -1413,12 +1413,15 @@ function loadRiveRuntime(version) {
 
 function onPreviewVerChange(version) {
   if (!currentData) return;
-  // Force reload with new version
+  // Must replace canvas to fully reset WebGL context between different WASM versions
   cleanupPreview();
   riveLoadedVersion = null;
   window.rive = undefined;
   const old = document.getElementById('rive-runtime-script');
   if (old) old.remove();
+  const container = document.getElementById('preview-container');
+  const oldCanvas = document.getElementById('preview-canvas');
+  if (oldCanvas) { const c = document.createElement('canvas'); c.id = 'preview-canvas'; oldCanvas.replaceWith(c); }
   initPreview();
 }
 
@@ -1472,11 +1475,13 @@ async function initPreview() {
     const smObjs = currentData.objects.filter(o=>o.typeName==='StateMachine');
     const firstSm = smObjs.length ? smObjs[0].name : null;
 
+    const curVer = document.getElementById('preview-ver').value || '';
+    const supportsAutoBind = curVer >= '2.27';
+
     const riveOpts = {
       buffer: currentData.buffer,
       canvas: canvas,
       autoplay: true,
-      autoBind: true,
       useOffscreenRenderer: false,
       onLoad: () => {
         msg.style.display = 'none';
@@ -1487,11 +1492,15 @@ async function initPreview() {
         buildControlPanel();
       },
       onLoadError: (e) => {
-        msg.textContent = (lang==='zh' ? '文件加载失败: ' : 'File load error: ') + (e||'unknown');
+        const ver = document.getElementById('preview-ver').value;
+        msg.innerHTML = (lang==='zh'
+          ? '⚠️ 文件加载失败 (v'+ver+')<br><span style="color:#565f89;font-size:12px">可能原因：.riv 文件版本与运行时不兼容<br>请尝试切换其他版本</span>'
+          : '⚠️ File load error (v'+ver+')<br><span style="color:#565f89;font-size:12px">The .riv file may be incompatible with this runtime version<br>Try switching to a different version</span>');
         msg.style.display = 'block';
       }
     };
     // Play default state machine if available
+    if (supportsAutoBind) riveOpts.autoBind = true;
     if (firstSm) riveOpts.stateMachines = [firstSm];
 
     riveInstance = new rive.Rive(riveOpts);
@@ -1658,7 +1667,7 @@ function onPreviewAbChange(name) {
     canvas: canvas,
     autoplay: false,
     artboard: name,
-    autoBind: true,
+    autoBind: (document.getElementById('preview-ver').value||'') >= '2.27',
     onLoad: () => {
       riveInstance._inspectorFile = currentData.filename;
       riveInstance._inspectorVer = document.getElementById('preview-ver').value;
