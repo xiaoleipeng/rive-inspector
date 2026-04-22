@@ -1382,6 +1382,10 @@ function loadRiveRuntime(version) {
     s.id = 'rive-runtime-script';
     s.src = riveJsUrl(version);
     s.onload = () => {
+      // Point WASM to same directory as rive.js for local versions
+      if (RIVE_VER_LOCAL.has(version) && window.rive) {
+        rive.RuntimeLoader.setWasmUrl('vendor/rive/'+version+'/rive.wasm');
+      }
       riveLoadedVersion = version;
       resolve();
     };
