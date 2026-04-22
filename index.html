@@ -1383,7 +1383,7 @@ function loadRiveRuntime(version) {
     s.id = 'rive-runtime-script';
     s.src = riveJsUrl(version);
     s.onload = () => {
-      // Point WASM to same directory as rive.js for local versions
+      // Point WASM to local path for bundled versions
       if (RIVE_VER_LOCAL.has(version) && window.rive) {
         rive.RuntimeLoader.setWasmUrl('vendor/rive/'+version+'/rive.wasm');
       }
@@ -1423,6 +1423,15 @@ function onPreviewVerChange(version) {
 async function initPreview() {
   const msg = document.getElementById('preview-msg');
   if (!currentData || !currentData.buffer) return;
+
+  // file:// cannot fetch WASM even with XHR in modern Chrome
+  if (location.protocol === 'file:') {
+    msg.innerHTML = lang==='zh'
+      ? '⚠️ 预览功能需要 HTTP 服务器（浏览器安全限制）<br><br><code style="background:#24283b;padding:4px 8px;border-radius:4px">python3 -m http.server 8080</code><br>然后访问 <a href="http://localhost:8080" style="color:#7aa2f7">http://localhost:8080</a><br><br><span style="color:#565f89">其他功能（树形/统计/图形/导出）不受影响</span>'
+      : '⚠️ Preview requires HTTP server (browser security)<br><br><code style="background:#24283b;padding:4px 8px;border-radius:4px">python3 -m http.server 8080</code><br>Then visit <a href="http://localhost:8080" style="color:#7aa2f7">http://localhost:8080</a><br><br><span style="color:#565f89">Other tabs (Tree/Stats/Graph/Export) work offline</span>';
+    msg.style.display = 'block';
+    return;
+  }
 
   // Already running for this file and same version
   if (riveInstance && riveInstance._inspectorFile === currentData.filename && riveInstance._inspectorVer === (document.getElementById('preview-ver').value)) {
