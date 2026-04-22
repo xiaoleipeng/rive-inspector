@@ -1333,7 +1333,12 @@ const RIVE_VER_TOP = ['2.37.3','2.37.2','2.37.1','2.37.0','2.36.0','2.35.4'];
 const RIVE_VER_MID = ['2.35.3','2.35.2','2.35.1','2.35.0','2.34.2','2.34.1','2.34.0','2.33.3','2.33.2','2.33.1','2.33.0','2.32.2','2.32.1','2.32.0','2.31.5','2.31.4','2.31.3','2.31.2','2.31.1','2.31.0','2.30.4','2.30.3','2.30.2','2.30.1','2.30.0'];
 const RIVE_VER_OLD = ['2.29.0','2.28.0','2.27.5','2.27.4','2.27.3','2.27.2','2.27.1','2.27.0'];
 const RIVE_VER_HIGHLIGHT = {'2.27.2':'≈Android 10.1.4','2.27.3':'≈Android 10.1.5'};
+const RIVE_VER_LOCAL = new Set([...RIVE_VER_TOP, '2.27.3', '2.27.2']); // bundled in vendor/rive/{ver}/
 const RIVE_CDN = 'https://cdn.jsdelivr.net/npm/@rive-app/webgl2@';
+
+function riveJsUrl(ver) {
+  return RIVE_VER_LOCAL.has(ver) ? 'vendor/rive/'+ver+'/rive.js' : RIVE_CDN+ver+'/rive.js';
+}
 
 function initVersionSelector(expanded) {
   const sel = document.getElementById('preview-ver');
@@ -1341,7 +1346,9 @@ function initVersionSelector(expanded) {
   let h = '';
   const opt = (v) => {
     const hl = RIVE_VER_HIGHLIGHT[v];
-    return '<option value="'+v+'"'+(v===cur?' selected':'')+(hl?' style="color:#f7768e;font-weight:bold"':'')+'>v'+v+(hl?' ('+hl+')':'')+'</option>';
+    const local = RIVE_VER_LOCAL.has(v);
+    const label = 'v'+v+(hl?' ('+hl+')':'')+(local?' ●':'');
+    return '<option value="'+v+'"'+(v===cur?' selected':'')+(hl?' style="color:#f7768e;font-weight:bold"':'')+'>'+label+'</option>';
   };
   for (const v of RIVE_VER_TOP) h += opt(v);
   if (expanded) {
@@ -1363,25 +1370,36 @@ document.getElementById('preview-ver').addEventListener('change', function() {
 });
 
 function loadRiveRuntime(version) {
-  version = version || document.getElementById('preview-ver').value || RIVE_VERSIONS[0];
+  version = version || document.getElementById('preview-ver').value || RIVE_VER_TOP[0];
   return new Promise((resolve, reject) => {
-    // Already loaded this version
     if (riveLoadedVersion === version && window.rive) { resolve(); return; }
-    // Remove old script if switching version
     const old = document.getElementById('rive-runtime-script');
     if (old) old.remove();
-    // Reset state
     riveLoadedVersion = null;
     window.rive = undefined;
 
     const s = document.createElement('script');
     s.id = 'rive-runtime-script';
-    s.src = RIVE_CDN + version + '/rive.js';
+    s.src = riveJsUrl(version);
     s.onload = () => {
       riveLoadedVersion = version;
       resolve();
     };
-    s.onerror = () => reject(new Error('Failed to load Rive v' + version));
+    s.onerror = () => {
+      // Local failed, fallback to CDN
+      if (RIVE_VER_LOCAL.has(version)) {
+        console.warn('Local rive v'+version+' failed, trying CDN...');
+        s.remove();
+        const s2 = document.createElement('script');
+        s2.id = 'rive-runtime-script';
+        s2.src = RIVE_CDN + version + '/rive.js';
+        s2.onload = () => { riveLoadedVersion = version; resolve(); };
+        s2.onerror = () => reject(new Error('Failed to load Rive v' + version));
+        document.head.appendChild(s2);
+      } else {
+        reject(new Error('Failed to load Rive v' + version));
+      }
+    };
     document.head.appendChild(s);
   });
 }
@@ -1412,17 +1430,23 @@ async function initPreview() {
 
   const canvas = document.getElementById('preview-canvas');
 
-  msg.textContent = (lang==='zh' ? '加载 Rive 运行时 v' : 'Loading Rive runtime v') + (document.getElementById('preview-ver').value) + '...';
+  const ver = document.getElementById('preview-ver').value;
+  const isLocal = RIVE_VER_LOCAL.has(ver);
+  const src = isLocal ? (lang==='zh'?'本地':'local') : 'CDN';
+  msg.innerHTML = (lang==='zh' ? '加载 Rive v' : 'Loading Rive v') + ver + ' <span style="color:#565f89">(' + src + ')</span><br><span id="preview-load-step" style="color:#7aa2f7;font-size:12px">' + (lang==='zh'?'① 下载 JS...':'① Downloading JS...') + '</span>';
   msg.style.display = 'block';
 
   try {
     await loadRiveRuntime();
+    const step = document.getElementById('preview-load-step');
+    if (step) step.textContent = lang==='zh' ? '② 加载 WASM (~2MB)...' : '② Loading WASM (~2MB)...';
   } catch(e) {
     msg.textContent = (lang==='zh' ? '加载失败: ' : 'Load failed: ') + e.message;
     return;
   }
 
-  msg.textContent = lang==='zh' ? '初始化预览...' : 'Initializing preview...';
+  const step = document.getElementById('preview-load-step');
+  if (step) step.textContent = lang==='zh' ? '③ 初始化渲染...' : '③ Initializing renderer...';
 
   try {
     // Find default state machine name
