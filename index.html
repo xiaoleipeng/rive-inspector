@@ -80,6 +80,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 /* Export */
 #tab-export .exp-btn{display:inline-block;background:#3b4261;color:#c0caf5;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px;margin:8px 4px;font-family:inherit}
 #tab-export .exp-btn:hover{background:#7aa2f7;color:#1a1b26}
+/* Preview */
+#tab-preview{padding:0;display:flex;flex-direction:column}
+#preview-toolbar{display:flex;gap:6px;padding:6px 12px;background:#24283b;border-bottom:1px solid #3b4261;align-items:center;flex-shrink:0}
+#preview-toolbar select{background:#1a1b26;border:1px solid #3b4261;color:#c0caf5;padding:3px 6px;border-radius:4px;font:inherit;font-size:12px}
+#preview-container{flex:1;position:relative;overflow:hidden;background:#2a2a3a}
+#preview-canvas{display:block;width:100%;height:100%}
+#preview-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#565f89;font-size:14px;text-align:center}
+#preview-info{margin-left:auto;color:#565f89;font-size:11px}
 /* Search */
 .search{background:#1a1b26;border:1px solid #3b4261;color:#c0caf5;padding:6px 10px;border-radius:4px;font:inherit;font-size:12px;outline:none;width:300px;margin-bottom:8px}
 .search:focus{border-color:#7aa2f7}
@@ -99,6 +107,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <button class="tab active" data-tab="tree">🌳 树形</button>
 <button class="tab" data-tab="stats">📊 统计</button>
 <button class="tab" data-tab="graph">🔗 图形</button>
+<button class="tab" data-tab="preview">👁 预览</button>
 <button class="tab" data-tab="export">💾 导出</button>
 </div>
 <button id="newfile" class="btn-sm">Open</button>
@@ -107,6 +116,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="tab-tree" class="tabcontent active"></div>
 <div id="tab-stats" class="tabcontent"></div>
 <div id="tab-graph" class="tabcontent"><canvas id="gcanvas"></canvas></div>
+<div id="tab-preview" class="tabcontent"><div id="preview-toolbar"><button id="preview-play" class="btn-sm" onclick="togglePreviewPlay()">⏸</button><select id="preview-ab" onchange="onPreviewAbChange(this.value)"></select><select id="preview-sm" onchange="onPreviewSmChange(this.value)"></select><button class="btn-sm" onclick="cyclePreviewBg()">🎨</button><span id="preview-info"></span></div><div id="preview-container"><canvas id="preview-canvas"></canvas><div id="preview-msg"></div></div></div>
 <div id="tab-export" class="tabcontent"></div>
 </div>
 <div id="detail-modal"><div id="detail-body"><div id="detail-header"><span id="detail-title"></span><button id="detail-close" onclick="closeDetail()">✕</button></div><div id="detail-content"></div></div></div>
@@ -816,7 +826,7 @@ let lang = (navigator.language||'').startsWith('zh') ? 'zh' : 'en';
 const I18N = {
   zh: {
     dropTitle:'Rive Inspector',dropHint:'拖拽 .riv 文件到此处，或',dropLink:'点击选择文件',
-    tabTree:'🌳 树形',tabStats:'📊 统计',tabGraph:'🔗 图形',tabExport:'💾 导出',openOther:'打开其他文件',
+    tabTree:'🌳 树形',tabStats:'📊 统计',tabGraph:'🔗 图形',tabPreview:'👁 预览',tabExport:'💾 导出',openOther:'打开其他文件',
     searchTree:'搜索类型、名称、属性...',expandAll:'展开全部',collapseAll:'折叠全部',expandLvl:'展开2层',
     score:'渲染评分',fileSize:'文件大小',objCount:'对象数',embeddedAssets:'内嵌资源',
     renderCost:'每帧渲染成本',clipPasses:'Clip passes',renderDetail:'渲染调用明细',
@@ -835,7 +845,7 @@ const I18N = {
   },
   en: {
     dropTitle:'Rive Inspector',dropHint:'Drop .riv file here, or',dropLink:'click to select',
-    tabTree:'🌳 Tree',tabStats:'📊 Stats',tabGraph:'🔗 Graph',tabExport:'💾 Export',openOther:'Open another',
+    tabTree:'🌳 Tree',tabStats:'📊 Stats',tabGraph:'🔗 Graph',tabPreview:'👁 Preview',tabExport:'💾 Export',openOther:'Open another',
     searchTree:'Search type, name, property...',expandAll:'Expand All',collapseAll:'Collapse All',expandLvl:'Level 2',
     score:'Render Score',fileSize:'File Size',objCount:'Objects',embeddedAssets:'Embedded Assets',
     renderCost:'Per-frame Render Cost',clipPasses:'Clip passes',renderDetail:'Render Call Detail',
@@ -872,7 +882,7 @@ function handleFile(file) {
       const tree = buildTree(objects);
       resolveRefs(objects, tree);
       const stats = computeStats(header, objects, tree, fileSize);
-      currentData = {header, objects, tree, stats, filename: file.name};
+      currentData = {header, objects, tree, stats, filename: file.name, buffer: e.target.result};
       showMain();
     } catch(err) { alert(t('alertParseFail') + err.message); console.error(err); }
   };
@@ -893,6 +903,8 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('tab-' + t.dataset.tab).classList.add('active');
     if (t.dataset.tab === 'graph' && currentData) setTimeout(() => { gLayout(); gDraw(); gFit(); }, 50);
+    if (t.dataset.tab === 'preview' && currentData) initPreview();
+    if (t.dataset.tab !== 'preview' && riveInstance) { riveInstance.stopRendering(); }
   });
 });
 
@@ -903,7 +915,7 @@ function showMain() {
   // Recompute stats (warnings depend on current language)
   currentData.stats = computeStats(currentData.header, currentData.objects, currentData.tree, currentData.stats.file.size);
   // Update tab labels
-  const tabLabels={tree:t('tabTree'),stats:t('tabStats'),graph:t('tabGraph'),export:t('tabExport')};
+  const tabLabels={tree:t('tabTree'),stats:t('tabStats'),graph:t('tabGraph'),preview:t('tabPreview'),export:t('tabExport')};
   document.querySelectorAll('.tab').forEach(tb=>{if(tabLabels[tb.dataset.tab])tb.textContent=tabLabels[tb.dataset.tab]});
   document.getElementById('newfile').textContent=t('openOther');
   renderTree();
@@ -1286,6 +1298,149 @@ window.exportStats = function() {
   if(s.warnings.length){out+='\n⚠ 警告:\n';for(const w of s.warnings)out+='  • '+w+'\n'}
   downloadFile(currentData.filename.replace('.riv','')+'_stats.txt',out);
 };
+
+// ── Preview ──
+let riveInstance = null;
+let riveLoaded = false;
+let previewBgIdx = 0;
+const previewBgs = ['#2a2a3a','#ffffff','#000000','transparent'];
+
+function loadRiveRuntime() {
+  return new Promise((resolve, reject) => {
+    if (riveLoaded) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'vendor/rive/rive.js';
+    s.onload = () => {
+      rive.RuntimeLoader.setWasmUrl('vendor/rive/rive.wasm');
+      riveLoaded = true;
+      resolve();
+    };
+    s.onerror = () => reject(new Error('Failed to load Rive runtime'));
+    document.head.appendChild(s);
+  });
+}
+
+async function initPreview() {
+  const msg = document.getElementById('preview-msg');
+  const canvas = document.getElementById('preview-canvas');
+  if (!currentData || !currentData.buffer) return;
+
+  // Already running for this file
+  if (riveInstance && riveInstance._inspectorFile === currentData.filename) {
+    riveInstance.startRendering();
+    riveInstance.resizeDrawingSurfaceToCanvas();
+    return;
+  }
+
+  // Cleanup old
+  cleanupPreview();
+
+  // Check WebGL2
+  const testCtx = canvas.getContext('webgl2');
+  if (!testCtx) {
+    msg.textContent = lang==='zh' ? '浏览器不支持 WebGL2，无法预览' : 'WebGL2 not supported';
+    msg.style.display = 'block';
+    return;
+  }
+
+  msg.textContent = lang==='zh' ? '加载 Rive 运行时...' : 'Loading Rive runtime...';
+  msg.style.display = 'block';
+
+  try {
+    await loadRiveRuntime();
+  } catch(e) {
+    msg.textContent = (lang==='zh' ? '加载失败: ' : 'Load failed: ') + e.message;
+    return;
+  }
+
+  msg.textContent = lang==='zh' ? '初始化预览...' : 'Initializing preview...';
+
+  try {
+    riveInstance = new rive.Rive({
+      buffer: currentData.buffer,
+      canvas: canvas,
+      autoplay: true,
+      useOffscreenRenderer: false,
+      onLoad: () => {
+        msg.style.display = 'none';
+        riveInstance._inspectorFile = currentData.filename;
+        riveInstance.resizeDrawingSurfaceToCanvas();
+        populatePreviewControls();
+      },
+      onLoadError: (e) => {
+        msg.textContent = (lang==='zh' ? '文件加载失败: ' : 'File load error: ') + (e||'unknown');
+        msg.style.display = 'block';
+      }
+    });
+  } catch(e) {
+    msg.textContent = (lang==='zh' ? '初始化失败: ' : 'Init error: ') + e.message;
+  }
+}
+
+function populatePreviewControls() {
+  if (!riveInstance) return;
+  const abSel = document.getElementById('preview-ab');
+  const smSel = document.getElementById('preview-sm');
+  // Artboard names from our parsed data
+  const abNames = currentData.objects.filter(o=>o.typeName==='Artboard').map(o=>o.name||'unnamed');
+  abSel.innerHTML = abNames.map((n,i) => '<option value="'+esc(n)+'"'+(i===0?' selected':'')+'>'+esc(n)+'</option>').join('');
+  // SM/Animation names
+  const smNames = riveInstance.stateMachineNames || [];
+  const animNames = riveInstance.animationNames || [];
+  let opts = '';
+  for (const n of smNames) opts += '<option value="sm:'+esc(n)+'">SM: '+esc(n)+'</option>';
+  for (const n of animNames) opts += '<option value="anim:'+esc(n)+'">Anim: '+esc(n)+'</option>';
+  smSel.innerHTML = opts;
+  // Info
+  const b = riveInstance.bounds;
+  if (b) document.getElementById('preview-info').textContent = Math.round(b.maxX)+'×'+Math.round(b.maxY);
+}
+
+function onPreviewAbChange(name) {
+  if (!riveInstance || !currentData) return;
+  cleanupPreview();
+  riveInstance = new rive.Rive({
+    buffer: currentData.buffer,
+    canvas: document.getElementById('preview-canvas'),
+    autoplay: true,
+    artboard: name,
+    onLoad: () => {
+      riveInstance._inspectorFile = currentData.filename;
+      riveInstance.resizeDrawingSurfaceToCanvas();
+      populatePreviewControls();
+      document.getElementById('preview-msg').style.display = 'none';
+    }
+  });
+}
+
+function onPreviewSmChange(val) {
+  if (!riveInstance) return;
+  riveInstance.stop();
+  const [type, name] = [val.slice(0,val.indexOf(':')), val.slice(val.indexOf(':')+1)];
+  if (type === 'sm') riveInstance.play(name);
+  else riveInstance.play(name);
+}
+
+function togglePreviewPlay() {
+  if (!riveInstance) return;
+  if (riveInstance.isPlaying) { riveInstance.pause(); document.getElementById('preview-play').textContent='▶'; }
+  else { riveInstance.play(); document.getElementById('preview-play').textContent='⏸'; }
+}
+
+function cyclePreviewBg() {
+  previewBgIdx = (previewBgIdx + 1) % previewBgs.length;
+  const c = document.getElementById('preview-container');
+  const bg = previewBgs[previewBgIdx];
+  c.style.background = bg === 'transparent' ? 'repeating-conic-gradient(#3b4261 0% 25%, #24283b 0% 50%) 0 0/16px 16px' : bg;
+}
+
+function cleanupPreview() {
+  if (riveInstance) { try { riveInstance.cleanup(); } catch(e){} riveInstance = null; }
+}
+
+window.addEventListener('resize', () => {
+  if (riveInstance) try { riveInstance.resizeDrawingSurfaceToCanvas(); } catch(e){}
+});
 
 </script>
 </body></html>
