@@ -23,6 +23,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .btn-sm:hover{background:#565f89;color:#c0caf5}
 .tabcontent{flex:1;overflow:auto;display:none;padding:12px 16px}
 .tabcontent.active{display:block}
+#tab-preview.active{display:flex}
 /* Tree */
 .tnode{margin-left:18px}
 .trow{display:flex;align-items:center;padding:2px 6px;cursor:pointer;border-radius:3px;gap:6px;font-size:13px;white-space:nowrap}
@@ -84,6 +85,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 #tab-preview{padding:0;display:flex;flex-direction:column}
 #preview-toolbar{display:flex;gap:6px;padding:6px 12px;background:#24283b;border-bottom:1px solid #3b4261;align-items:center;flex-shrink:0}
 #preview-toolbar select{background:#1a1b26;border:1px solid #3b4261;color:#c0caf5;padding:3px 6px;border-radius:4px;font:inherit;font-size:12px}
+#preview-body{flex:1;display:flex;overflow:hidden;min-height:0}
+#preview-panel{width:260px;flex-shrink:0;overflow-y:auto;background:#1f2335;border-right:1px solid #3b4261;padding:8px;font-size:12px}
+#preview-panel:empty{display:none}
+.pv-group{margin-bottom:8px}
+.pv-gtitle{color:#7aa2f7;font-weight:600;font-size:11px;padding:4px 0;border-bottom:1px solid #3b4261;cursor:pointer;user-select:none}
+.pv-gtitle::before{content:'▼ ';font-size:9px}
+.pv-gtitle.collapsed::before{content:'▶ ';font-size:9px}
+.pv-gtitle.collapsed+.pv-gbody{display:none}
+.pv-row{display:flex;align-items:center;padding:3px 0;gap:6px}
+.pv-label{color:#9aa5ce;min-width:70px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.pv-input{flex:1;background:#1a1b26;border:1px solid #3b4261;color:#c0caf5;padding:2px 6px;border-radius:3px;font:inherit;font-size:11px;min-width:0}
+.pv-input:focus{border-color:#7aa2f7;outline:none}
+.pv-btn{background:#3b4261;border:none;color:#c0caf5;padding:2px 10px;border-radius:3px;cursor:pointer;font-size:11px}
+.pv-btn:hover{background:#7aa2f7;color:#1a1b26}
+.pv-range{flex:1;min-width:0}
+.pv-num{width:50px}
+.pv-color{width:28px;height:20px;padding:0;border:1px solid #3b4261;border-radius:3px;cursor:pointer}
 #preview-container{flex:1;position:relative;overflow:hidden;background:#2a2a3a}
 #preview-canvas{display:block;width:100%;height:100%}
 #preview-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#565f89;font-size:14px;text-align:center}
@@ -116,7 +134,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="tab-tree" class="tabcontent active"></div>
 <div id="tab-stats" class="tabcontent"></div>
 <div id="tab-graph" class="tabcontent"><canvas id="gcanvas"></canvas></div>
-<div id="tab-preview" class="tabcontent"><div id="preview-toolbar"><button id="preview-play" class="btn-sm" onclick="togglePreviewPlay()">⏸</button><select id="preview-ab" onchange="onPreviewAbChange(this.value)"></select><select id="preview-sm" onchange="onPreviewSmChange(this.value)"></select><button class="btn-sm" onclick="cyclePreviewBg()">🎨</button><span id="preview-info"></span></div><div id="preview-container"><canvas id="preview-canvas"></canvas><div id="preview-msg"></div></div></div>
+<div id="tab-preview" class="tabcontent"><div id="preview-toolbar"><button id="preview-play" class="btn-sm" onclick="togglePreviewPlay()">⏸</button><select id="preview-ab" onchange="onPreviewAbChange(this.value)"></select><select id="preview-sm" onchange="onPreviewSmChange(this.value)"></select><button class="btn-sm" onclick="cyclePreviewBg()">🎨</button><select id="preview-fit" class="btn-sm" onchange="onPreviewFitChange(this.value)"><option value="Contain" selected>Contain</option><option value="Cover">Cover</option><option value="Fill">Fill</option><option value="FitWidth">FitWidth</option><option value="FitHeight">FitHeight</option><option value="None">None</option><option value="ScaleDown">ScaleDown</option><option value="Layout">Layout</option></select><select id="preview-ver" class="btn-sm"></select><span id="preview-info"></span></div><div id="preview-body"><div id="preview-panel"></div><div id="preview-container"><canvas id="preview-canvas"></canvas><div id="preview-msg"></div></div></div></div>
 <div id="tab-export" class="tabcontent"></div>
 </div>
 <div id="detail-modal"><div id="detail-body"><div id="detail-header"><span id="detail-title"></span><button id="detail-close" onclick="closeDetail()">✕</button></div><div id="detail-content"></div></div></div>
@@ -875,6 +893,8 @@ const fileinput = document.getElementById('fileinput');
 
 function handleFile(file) {
   if (!file || !file.name.endsWith('.riv')) { alert(t('alertBadFile')); return; }
+  cleanupPreview();
+  previewCurrentAb = null;
   const reader = new FileReader();
   reader.onload = e => {
     try {
@@ -893,7 +913,7 @@ dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classL
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
 dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
 fileinput.addEventListener('change', e => handleFile(e.target.files[0]));
-document.getElementById('newfile').addEventListener('click', () => { document.getElementById('main').classList.add('hidden'); dropzone.classList.remove('hidden'); });
+document.getElementById('newfile').addEventListener('click', () => { cleanupPreview(); document.getElementById('main').classList.add('hidden'); dropzone.classList.remove('hidden'); });
 
 // ── Tabs ──
 document.querySelectorAll('.tab').forEach(t => {
@@ -903,8 +923,7 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('tab-' + t.dataset.tab).classList.add('active');
     if (t.dataset.tab === 'graph' && currentData) setTimeout(() => { gLayout(); gDraw(); gFit(); }, 50);
-    if (t.dataset.tab === 'preview' && currentData) initPreview();
-    if (t.dataset.tab !== 'preview' && riveInstance) { riveInstance.stopRendering(); }
+    if (t.dataset.tab === 'preview' && currentData) { initPreview().then(() => setTimeout(resizePreviewCanvas, 50)); }
   });
 });
 
@@ -922,6 +941,10 @@ function showMain() {
   renderStatsView();
   renderGraphView();
   renderExport();
+  // If preview tab is active, init preview for new file
+  if (document.getElementById('tab-preview').classList.contains('active')) {
+    initPreview().then(() => setTimeout(resizePreviewCanvas, 50));
+  }
 }
 
 // ── Tree View ──
@@ -1301,49 +1324,95 @@ window.exportStats = function() {
 
 // ── Preview ──
 let riveInstance = null;
-let riveLoaded = false;
+let riveLoadedVersion = null;
 let previewBgIdx = 0;
 const previewBgs = ['#2a2a3a','#ffffff','#000000','transparent'];
 
-function loadRiveRuntime() {
+// Rive WASM versions
+const RIVE_VER_TOP = ['2.37.3','2.37.2','2.37.1','2.37.0','2.36.0','2.35.4'];
+const RIVE_VER_MID = ['2.35.3','2.35.2','2.35.1','2.35.0','2.34.2','2.34.1','2.34.0','2.33.3','2.33.2','2.33.1','2.33.0','2.32.2','2.32.1','2.32.0','2.31.5','2.31.4','2.31.3','2.31.2','2.31.1','2.31.0','2.30.4','2.30.3','2.30.2','2.30.1','2.30.0'];
+const RIVE_VER_OLD = ['2.29.0','2.28.0','2.27.5','2.27.4','2.27.3','2.27.2','2.27.1','2.27.0'];
+const RIVE_VER_HIGHLIGHT = {'2.27.2':'≈Android 10.1.4','2.27.3':'≈Android 10.1.5'};
+const RIVE_CDN = 'https://cdn.jsdelivr.net/npm/@rive-app/webgl2@';
+
+function initVersionSelector(expanded) {
+  const sel = document.getElementById('preview-ver');
+  const cur = sel.value || RIVE_VER_TOP[0];
+  let h = '';
+  const opt = (v) => {
+    const hl = RIVE_VER_HIGHLIGHT[v];
+    return '<option value="'+v+'"'+(v===cur?' selected':'')+(hl?' style="color:#f7768e;font-weight:bold"':'')+'>v'+v+(hl?' ('+hl+')':'')+'</option>';
+  };
+  for (const v of RIVE_VER_TOP) h += opt(v);
+  if (expanded) {
+    for (const v of RIVE_VER_MID) h += opt(v);
+  } else {
+    h += '<option value="__more__">···</option>';
+  }
+  for (const v of RIVE_VER_OLD) h += opt(v);
+  sel.innerHTML = h;
+}
+initVersionSelector(false);
+
+document.getElementById('preview-ver').addEventListener('change', function() {
+  if (this.value === '__more__') {
+    initVersionSelector(true);
+    return;
+  }
+  onPreviewVerChange(this.value);
+});
+
+function loadRiveRuntime(version) {
+  version = version || document.getElementById('preview-ver').value || RIVE_VERSIONS[0];
   return new Promise((resolve, reject) => {
-    if (riveLoaded) { resolve(); return; }
+    // Already loaded this version
+    if (riveLoadedVersion === version && window.rive) { resolve(); return; }
+    // Remove old script if switching version
+    const old = document.getElementById('rive-runtime-script');
+    if (old) old.remove();
+    // Reset state
+    riveLoadedVersion = null;
+    window.rive = undefined;
+
     const s = document.createElement('script');
-    s.src = 'vendor/rive/rive.js';
+    s.id = 'rive-runtime-script';
+    s.src = RIVE_CDN + version + '/rive.js';
     s.onload = () => {
-      rive.RuntimeLoader.setWasmUrl('vendor/rive/rive.wasm');
-      riveLoaded = true;
+      riveLoadedVersion = version;
       resolve();
     };
-    s.onerror = () => reject(new Error('Failed to load Rive runtime'));
+    s.onerror = () => reject(new Error('Failed to load Rive v' + version));
     document.head.appendChild(s);
   });
 }
 
+function onPreviewVerChange(version) {
+  if (!currentData) return;
+  // Force reload with new version
+  cleanupPreview();
+  riveLoadedVersion = null;
+  window.rive = undefined;
+  const old = document.getElementById('rive-runtime-script');
+  if (old) old.remove();
+  initPreview();
+}
+
 async function initPreview() {
   const msg = document.getElementById('preview-msg');
-  const canvas = document.getElementById('preview-canvas');
   if (!currentData || !currentData.buffer) return;
 
-  // Already running for this file
-  if (riveInstance && riveInstance._inspectorFile === currentData.filename) {
-    riveInstance.startRendering();
-    riveInstance.resizeDrawingSurfaceToCanvas();
+  // Already running for this file and same version
+  if (riveInstance && riveInstance._inspectorFile === currentData.filename && riveInstance._inspectorVer === (document.getElementById('preview-ver').value)) {
+    setTimeout(resizePreviewCanvas, 50);
     return;
   }
 
   // Cleanup old
   cleanupPreview();
 
-  // Check WebGL2
-  const testCtx = canvas.getContext('webgl2');
-  if (!testCtx) {
-    msg.textContent = lang==='zh' ? '浏览器不支持 WebGL2，无法预览' : 'WebGL2 not supported';
-    msg.style.display = 'block';
-    return;
-  }
+  const canvas = document.getElementById('preview-canvas');
 
-  msg.textContent = lang==='zh' ? '加载 Rive 运行时...' : 'Loading Rive runtime...';
+  msg.textContent = (lang==='zh' ? '加载 Rive 运行时 v' : 'Loading Rive runtime v') + (document.getElementById('preview-ver').value) + '...';
   msg.style.display = 'block';
 
   try {
@@ -1356,59 +1425,215 @@ async function initPreview() {
   msg.textContent = lang==='zh' ? '初始化预览...' : 'Initializing preview...';
 
   try {
-    riveInstance = new rive.Rive({
+    // Find default state machine name
+    const defaultSmId = currentData.objects.find(o=>o.typeName==='Artboard')
+      ? (currentData.stats.file ? null : null) : null;
+    // Get first SM name from parsed data
+    const smObjs = currentData.objects.filter(o=>o.typeName==='StateMachine');
+    const firstSm = smObjs.length ? smObjs[0].name : null;
+
+    const riveOpts = {
       buffer: currentData.buffer,
       canvas: canvas,
       autoplay: true,
+      autoBind: true,
       useOffscreenRenderer: false,
       onLoad: () => {
         msg.style.display = 'none';
         riveInstance._inspectorFile = currentData.filename;
-        riveInstance.resizeDrawingSurfaceToCanvas();
+        riveInstance._inspectorVer = document.getElementById('preview-ver').value;
+        resizePreviewCanvas();
         populatePreviewControls();
+        buildControlPanel();
       },
       onLoadError: (e) => {
         msg.textContent = (lang==='zh' ? '文件加载失败: ' : 'File load error: ') + (e||'unknown');
         msg.style.display = 'block';
       }
-    });
+    };
+    // Play default state machine if available
+    if (firstSm) riveOpts.stateMachines = [firstSm];
+
+    riveInstance = new rive.Rive(riveOpts);
   } catch(e) {
     msg.textContent = (lang==='zh' ? '初始化失败: ' : 'Init error: ') + e.message;
   }
 }
 
+let previewCurrentAb = null;
+
 function populatePreviewControls() {
   if (!riveInstance) return;
   const abSel = document.getElementById('preview-ab');
   const smSel = document.getElementById('preview-sm');
-  // Artboard names from our parsed data
+  // Artboard names — select current
   const abNames = currentData.objects.filter(o=>o.typeName==='Artboard').map(o=>o.name||'unnamed');
-  abSel.innerHTML = abNames.map((n,i) => '<option value="'+esc(n)+'"'+(i===0?' selected':'')+'>'+esc(n)+'</option>').join('');
-  // SM/Animation names
+  const curAb = previewCurrentAb || abNames[0] || '';
+  abSel.innerHTML = abNames.map(n => '<option value="'+esc(n)+'"'+(n===curAb?' selected':'')+'>'+esc(n)+'</option>').join('');
+  // SM/Animation names for current artboard
   const smNames = riveInstance.stateMachineNames || [];
   const animNames = riveInstance.animationNames || [];
-  let opts = '';
-  for (const n of smNames) opts += '<option value="sm:'+esc(n)+'">SM: '+esc(n)+'</option>';
-  for (const n of animNames) opts += '<option value="anim:'+esc(n)+'">Anim: '+esc(n)+'</option>';
+  const playingSM = riveInstance.playingStateMachineNames || [];
+  const playingAnim = riveInstance.playingAnimationNames || [];
+  let opts = '', hasSelected = false;
+  for (const n of smNames) {
+    const sel = playingSM.includes(n);
+    if (sel) hasSelected = true;
+    opts += '<option value="sm:'+esc(n)+'"'+(sel?' selected':'')+'>SM: '+esc(n)+'</option>';
+  }
+  for (const n of animNames) {
+    const sel = playingAnim.includes(n);
+    if (sel) hasSelected = true;
+    opts += '<option value="anim:'+esc(n)+'"'+(sel?' selected':'')+'>Anim: '+esc(n)+'</option>';
+  }
+  // If nothing marked as playing yet (async), select first SM
+  if (!hasSelected && opts) {
+    opts = opts.replace('>', ' selected>');
+  }
   smSel.innerHTML = opts;
   // Info
   const b = riveInstance.bounds;
   if (b) document.getElementById('preview-info').textContent = Math.round(b.maxX)+'×'+Math.round(b.maxY);
 }
 
+// ── Preview Control Panel ──
+let smInputMap = {};
+
+function buildControlPanel() {
+  const panel = document.getElementById('preview-panel');
+  if (!riveInstance) { panel.innerHTML = ''; return; }
+  let h = '';
+  smInputMap = {};
+
+  // 1. State Machine Inputs
+  const smSel = document.getElementById('preview-sm');
+  const smVal = smSel ? smSel.value : '';
+  const smName = smVal.startsWith('sm:') ? smVal.slice(3) : '';
+  let inputs = [];
+  try { if (smName) inputs = riveInstance.stateMachineInputs(smName) || []; } catch(e){}
+  if (inputs.length) {
+    h += '<div class="pv-group"><div class="pv-gtitle" onclick="this.classList.toggle(\'collapsed\')">Inputs</div><div class="pv-gbody">';
+    for (const inp of inputs) {
+      smInputMap[inp.name] = inp;
+      if (inp.type === 58) { // Trigger
+        h += '<div class="pv-row"><span class="pv-label" title="'+esc(inp.name)+'">'+esc(inp.name)+'</span><button class="pv-btn" data-sm-trigger="'+esc(inp.name)+'">Fire</button></div>';
+      } else if (inp.type === 59) { // Boolean
+        h += '<div class="pv-row"><span class="pv-label" title="'+esc(inp.name)+'">'+esc(inp.name)+'</span><input type="checkbox" data-sm-bool="'+esc(inp.name)+'"'+(inp.value?' checked':'')+'></div>';
+      } else if (inp.type === 56) { // Number
+        h += '<div class="pv-row"><span class="pv-label" title="'+esc(inp.name)+'">'+esc(inp.name)+'</span><input type="range" class="pv-range" data-sm-num="'+esc(inp.name)+'" min="0" max="100" step="0.1" value="'+(inp.value||0)+'"><input type="number" class="pv-input pv-num" data-sm-num-box="'+esc(inp.name)+'" value="'+(inp.value||0)+'" step="0.1"></div>';
+      }
+    }
+    h += '</div></div>';
+  }
+
+  // 2. Text Runs (named TextValueRun from parsed data)
+  const textRuns = currentData.objects.filter(o => o.typeName === 'TextValueRun' && o.name);
+  if (textRuns.length) {
+    h += '<div class="pv-group"><div class="pv-gtitle" onclick="this.classList.toggle(\'collapsed\')">Text</div><div class="pv-gbody">';
+    for (const tr of textRuns) {
+      let val = '';
+      try { val = riveInstance.getTextRunValue(tr.name) || ''; } catch(e){}
+      h += '<div class="pv-row"><span class="pv-label" title="'+esc(tr.name)+'">'+esc(tr.name)+'</span><input type="text" class="pv-input" data-text-run="'+esc(tr.name)+'" value="'+esc(val)+'"></div>';
+    }
+    h += '</div></div>';
+  }
+
+  // 3. ViewModel Properties
+  try {
+    const vmi = riveInstance.viewModelInstance;
+    if (vmi) {
+      const vm = riveInstance.defaultViewModel();
+      const props = vm ? vm.properties : [];
+      if (props && props.length) {
+        h += '<div class="pv-group"><div class="pv-gtitle" onclick="this.classList.toggle(\'collapsed\')">ViewModel</div><div class="pv-gbody">';
+        for (const p of props) {
+          const pn = esc(p.name);
+          const pt = p.type;
+          // type strings: "number","string","boolean","color","enum","trigger","list","viewModel","image"
+          if (pt === 'string') {
+            let v = ''; try { v = vmi.string(p.name).value || ''; } catch(e){}
+            h += '<div class="pv-row"><span class="pv-label" title="'+pn+'">'+pn+'</span><input type="text" class="pv-input" data-vm-str="'+pn+'" value="'+esc(v)+'"></div>';
+          } else if (pt === 'number') {
+            let v = 0; try { v = vmi.number(p.name).value || 0; } catch(e){}
+            h += '<div class="pv-row"><span class="pv-label" title="'+pn+'">'+pn+'</span><input type="range" class="pv-range" data-vm-num="'+pn+'" min="0" max="100" step="0.1" value="'+v+'"><input type="number" class="pv-input pv-num" data-vm-num-box="'+pn+'" value="'+v+'" step="0.1"></div>';
+          } else if (pt === 'boolean') {
+            let v = false; try { v = vmi.boolean(p.name).value; } catch(e){}
+            h += '<div class="pv-row"><span class="pv-label" title="'+pn+'">'+pn+'</span><input type="checkbox" data-vm-bool="'+pn+'"'+(v?' checked':'')+'></div>';
+          } else if (pt === 'color') {
+            let v = 0xFF000000; try { v = vmi.color(p.name).value; } catch(e){}
+            const hex = '#'+('000000'+((v>>>0)&0xFFFFFF).toString(16)).slice(-6);
+            h += '<div class="pv-row"><span class="pv-label" title="'+pn+'">'+pn+'</span><input type="color" class="pv-color" data-vm-color="'+pn+'" value="'+hex+'"></div>';
+          } else if (pt === 'enum') {
+            let cur = ''; try { cur = vmi.enum(p.name).value || ''; } catch(e){}
+            // Get enum options from file enums
+            let enumOpts = [];
+            try { const enums = riveInstance.enums(); if(enums) for(const en of enums) for(const val of en.values||[]) enumOpts.push(val); } catch(e){}
+            // Fallback: just show current value
+            if (!enumOpts.length && cur) enumOpts = [cur];
+            h += '<div class="pv-row"><span class="pv-label" title="'+pn+'">'+pn+'</span><select class="pv-input" data-vm-enum="'+pn+'">';
+            for (const opt of enumOpts) h += '<option'+(opt===cur?' selected':'')+'>'+esc(opt)+'</option>';
+            h += '</select></div>';
+          } else if (pt === 'trigger') {
+            h += '<div class="pv-row"><span class="pv-label" title="'+pn+'">'+pn+'</span><button class="pv-btn" data-vm-trigger="'+pn+'">Fire</button></div>';
+          }
+        }
+        h += '</div></div>';
+      }
+    }
+  } catch(e) { console.warn('ViewModel panel error:', e); }
+
+  panel.innerHTML = h;
+}
+
+// Event delegation for control panel
+document.getElementById('preview-panel').addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.smNum) { const inp = smInputMap[el.dataset.smNum]; if(inp) inp.value = parseFloat(el.value); const box = document.querySelector('[data-sm-num-box="'+el.dataset.smNum+'"]'); if(box) box.value = el.value; }
+  else if (el.dataset.smNumBox) { const inp = smInputMap[el.dataset.smNumBox]; if(inp) inp.value = parseFloat(el.value); const rng = document.querySelector('[data-sm-num="'+el.dataset.smNumBox+'"]'); if(rng) rng.value = el.value; }
+  else if (el.dataset.textRun) { try { riveInstance.setTextRunValue(el.dataset.textRun, el.value); } catch(e){} }
+  else if (el.dataset.vmStr) { try { riveInstance.viewModelInstance.string(el.dataset.vmStr).value = el.value; } catch(e){} }
+  else if (el.dataset.vmNum) { try { riveInstance.viewModelInstance.number(el.dataset.vmNum).value = parseFloat(el.value); } catch(e){} const box = document.querySelector('[data-vm-num-box="'+el.dataset.vmNum+'"]'); if(box) box.value = el.value; }
+  else if (el.dataset.vmNumBox) { try { riveInstance.viewModelInstance.number(el.dataset.vmNumBox).value = parseFloat(el.value); } catch(e){} const rng = document.querySelector('[data-vm-num="'+el.dataset.vmNumBox+'"]'); if(rng) rng.value = el.value; }
+  else if (el.dataset.vmColor) { try { const c = parseInt(el.value.slice(1),16); riveInstance.viewModelInstance.color(el.dataset.vmColor).value = 0xFF000000|c; } catch(e){} }
+});
+document.getElementById('preview-panel').addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.smBool) { const inp = smInputMap[el.dataset.smBool]; if(inp) inp.value = el.checked; }
+  else if (el.dataset.vmBool) { try { riveInstance.viewModelInstance.boolean(el.dataset.vmBool).value = el.checked; } catch(e){} }
+  else if (el.dataset.vmEnum) { try { riveInstance.viewModelInstance.enum(el.dataset.vmEnum).value = el.value; } catch(e){} }
+});
+document.getElementById('preview-panel').addEventListener('click', e => {
+  const el = e.target;
+  if (el.dataset.smTrigger) { const inp = smInputMap[el.dataset.smTrigger]; if(inp) inp.fire(); }
+  else if (el.dataset.vmTrigger) { try { riveInstance.viewModelInstance.trigger(el.dataset.vmTrigger).trigger(); } catch(e){} }
+});
+
 function onPreviewAbChange(name) {
-  if (!riveInstance || !currentData) return;
+  if (!currentData) return;
+  previewCurrentAb = name;
   cleanupPreview();
+  const canvas = document.getElementById('preview-canvas');
   riveInstance = new rive.Rive({
     buffer: currentData.buffer,
-    canvas: document.getElementById('preview-canvas'),
-    autoplay: true,
+    canvas: canvas,
+    autoplay: false,
     artboard: name,
+    autoBind: true,
     onLoad: () => {
       riveInstance._inspectorFile = currentData.filename;
-      riveInstance.resizeDrawingSurfaceToCanvas();
+      riveInstance._inspectorVer = document.getElementById('preview-ver').value;
+      // Get SM names for this artboard and auto-play first
+      const smNames = riveInstance.stateMachineNames || [];
+      if (smNames.length) riveInstance.play(smNames[0]);
+      else {
+        const animNames = riveInstance.animationNames || [];
+        if (animNames.length) riveInstance.play(animNames[0]);
+      }
+      resizePreviewCanvas();
       populatePreviewControls();
+      buildControlPanel();
       document.getElementById('preview-msg').style.display = 'none';
+      document.getElementById('preview-play').textContent = '⏸';
     }
   });
 }
@@ -1416,9 +1641,11 @@ function onPreviewAbChange(name) {
 function onPreviewSmChange(val) {
   if (!riveInstance) return;
   riveInstance.stop();
-  const [type, name] = [val.slice(0,val.indexOf(':')), val.slice(val.indexOf(':')+1)];
-  if (type === 'sm') riveInstance.play(name);
-  else riveInstance.play(name);
+  const sep = val.indexOf(':');
+  const type = val.slice(0, sep), name = val.slice(sep + 1);
+  riveInstance.play(name);
+  document.getElementById('preview-play').textContent = '⏸';
+  setTimeout(buildControlPanel, 100); // Rebuild inputs for new SM
 }
 
 function togglePreviewPlay() {
@@ -1434,12 +1661,54 @@ function cyclePreviewBg() {
   c.style.background = bg === 'transparent' ? 'repeating-conic-gradient(#3b4261 0% 25%, #24283b 0% 50%) 0 0/16px 16px' : bg;
 }
 
+let previewLastFit = 'Contain';
+function onPreviewFitChange(fitName) {
+  if (!riveInstance || !rive) return;
+  const wasLayout = previewLastFit === 'Layout';
+  previewLastFit = fitName;
+  // Switching away from Layout requires re-creating the instance
+  if (wasLayout && fitName !== 'Layout') {
+    const abSel = document.getElementById('preview-ab');
+    onPreviewAbChange(abSel.value);
+    // Restore fit after reload
+    setTimeout(() => {
+      if (riveInstance) {
+        riveInstance.layout = new rive.Layout({fit: rive.Fit[fitName] || rive.Fit.Contain, alignment: rive.Alignment.Center});
+        riveInstance.resizeDrawingSurfaceToCanvas();
+      }
+    }, 200);
+    return;
+  }
+  const opts = {fit: rive.Fit[fitName] || rive.Fit.Contain, alignment: rive.Alignment.Center};
+  if (fitName === 'Layout') opts.layoutScaleFactor = 1;
+  riveInstance.layout = new rive.Layout(opts);
+  riveInstance.resizeDrawingSurfaceToCanvas();
+}
+
 function cleanupPreview() {
-  if (riveInstance) { try { riveInstance.cleanup(); } catch(e){} riveInstance = null; }
+  if (riveInstance) {
+    try { riveInstance.stop(); } catch(e){}
+    // Don't call cleanup() — it triggers WebGL deleteTexture errors
+    // when the FinalizationRegistry fires after context is lost.
+    // Just stop and let Rive handle its own GC.
+    riveInstance = null;
+  }
+}
+
+function resizePreviewCanvas() {
+  if (!riveInstance) return;
+  const container = document.getElementById('preview-container');
+  const canvas = document.getElementById('preview-canvas');
+  // Set canvas size to container size (must be visible)
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w > 0 && h > 0) {
+    canvas.width = w; canvas.height = h;
+    riveInstance.resizeDrawingSurfaceToCanvas();
+  }
 }
 
 window.addEventListener('resize', () => {
-  if (riveInstance) try { riveInstance.resizeDrawingSurfaceToCanvas(); } catch(e){}
+  if (riveInstance) resizePreviewCanvas();
 });
 
 </script>

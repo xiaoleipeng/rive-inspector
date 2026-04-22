@@ -401,3 +401,241 @@ curl -L "https://cdn.jsdelivr.net/npm/@rive-app/webgl2@NEW_VERSION/rive.wasm" -o
 # 提交
 git add vendor/rive/ && git commit -m "chore: upgrade rive runtime to NEW_VERSION"
 ```
+
+## 9. 交互控制面板
+
+### 9.1 需求
+
+在预览 Tab 左侧增加控制面板，支持动态调整 .riv 文件的运行时数据，包括：
+1. **State Machine Inputs** — 触发器、数值、布尔开关
+2. **Text Runs** — 修改文本内容
+3. **ViewModel Properties** — 修改绑定数据（字符串、数值、布尔、颜色、枚举、触发器）
+
+参考布局：[Rive Marketplace 预览页](https://rive.app/marketplace/)
+
+### 9.2 布局设计
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ [⏸] [Artboard ▼] [SM: State Machine 1 ▼] [🎨]    500×500│  ← 顶部工具栏
+├──────────────┬───────────────────────────────────────────┤
+│ 左侧控制面板  │              Canvas 预览区                 │
+│ (260px,可滚动)│                                           │
+│              │                                           │
+│ ▼ Inputs     │                                           │
+│  bump    [触发]│         Rive WebGL2 渲染                  │
+│  speed   [═══]│                                           │
+│  active  [✓] │                                           │
+│              │                                           │
+│ ▼ Text       │                                           │
+│  title  [___]│                                           │
+│  desc   [___]│                                           │
+│              │                                           │
+│ ▼ ViewModel  │                                           │
+│  name   [___]│                                           │
+│  score  [═══]│                                           │
+│  done   [✓]  │                                           │
+│  color  [■]  │                                           │
+│  type   [▼]  │                                           │
+│  fire   [触发]│                                           │
+└──────────────┴───────────────────────────────────────────┘
+```
+
+面板特性：
+- 可折叠的分组（Inputs / Text / ViewModel）
+- 无数据时分组自动隐藏
+- 面板可通过按钮收起/展开，收起时 Canvas 占满宽度
+
+### 9.3 Rive API 映射
+
+#### 9.3.1 State Machine Inputs
+
+```javascript
+// 获取当前状态机的所有输入
+const inputs = riveInstance.stateMachineInputs(smName);
+// 每个 input: { name: string, type: number, value: number|boolean, fire(): void }
+// type: 56=Number, 59=Boolean, 58=Trigger
+```
+
+| Input 类型 | 控件 | 交互 |
+|-----------|------|------|
+| Trigger (58) | 按钮 | 点击调用 `input.fire()` |
+| Boolean (59) | checkbox | 切换设置 `input.value = true/false` |
+| Number (56) | range slider + 数字框 | 拖动/输入设置 `input.value = n` |
+
+#### 9.3.2 Text Runs
+
+```javascript
+// 从我们的解析数据中获取所有 TextValueRun 的名称
+const textRuns = currentData.objects
+  .filter(o => o.typeName === 'TextValueRun' && o.name);
+
+// 读取/写入
+const val = riveInstance.getTextRunValue(runName);
+riveInstance.setTextRunValue(runName, newValue);
+```
+
+| 控件 | 交互 |
+|------|------|
+| text input | 输入时实时调用 `setTextRunValue()` |
+
+#### 9.3.3 ViewModel Properties
+
+```javascript
+// 初始化时启用 autoBind
+const riveOpts = { ..., autoBind: true };
+
+// onLoad 后获取绑定的 ViewModel 实例
+const vmi = riveInstance.viewModelInstance;
+if (!vmi) return; // 文件没有 ViewModel
+
+// 遍历属性
+const vm = riveInstance.defaultViewModel();
+const properties = vm.properties; // [{name, type}]
+```
+
+| 属性类型 | 控件 | API |
+|---------|------|-----|
+| String | text input | `vmi.string("prop").value = "..."` |
+| Number | range slider + 数字框 | `vmi.number("prop").value = n` |
+| Boolean | checkbox | `vmi.boolean("prop").value = true` |
+| Color | color picker | `vmi.color("prop").value = 0xFFRRGGBB` |
+| Enum | select 下拉 | `vmi.enum("prop").value = "Option1"` |
+| Trigger | 按钮 | `vmi.trigger("prop").trigger()` |
+
+### 9.4 实现要点
+
+#### 数据扫描时机
+
+在 Rive `onLoad` 回调中扫描，此时所有数据已就绪：
+
+```javascript
+onLoad: () => {
+  populatePreviewControls();  // 现有：填充 Artboard/SM 下拉
+  buildControlPanel();        // 新增：构建左侧控制面板
+}
+```
+
+#### 控件生成逻辑
+
+```javascript
+function buildControlPanel() {
+  let html = '';
+
+  // 1. Inputs
+  const smName = getCurrentSmName();
+  const inputs = smName ? riveInstance.stateMachineInputs(smName) : [];
+  if (inputs && inputs.length) {
+    html += '<div class="pv-group"><div class="pv-group-title">▼ Inputs</div>';
+    for (const inp of inputs) {
+      if (inp.type === 58)      html += triggerControl(inp);
+      else if (inp.type === 59) html += boolControl(inp);
+      else if (inp.type === 56) html += numberControl(inp);
+    }
+    html += '</div>';
+  }
+
+  // 2. Text Runs
+  const textRuns = getNamedTextRuns();
+  if (textRuns.length) {
+    html += '<div class="pv-group"><div class="pv-group-title">▼ Text</div>';
+    for (const run of textRuns) html += textControl(run);
+    html += '</div>';
+  }
+
+  // 3. ViewModel
+  const vmi = riveInstance.viewModelInstance;
+  if (vmi) {
+    const vm = riveInstance.defaultViewModel();
+    const props = vm ? vm.properties : [];
+    if (props.length) {
+      html += '<div class="pv-group"><div class="pv-group-title">▼ ViewModel</div>';
+      for (const p of props) html += vmPropertyControl(vmi, p);
+      html += '</div>';
+    }
+  }
+
+  document.getElementById('preview-panel').innerHTML = html;
+  bindControlEvents(); // 绑定事件
+}
+```
+
+#### 事件绑定策略
+
+使用事件委托，在面板容器上监听 `input`/`change`/`click` 事件，通过 `data-*` 属性识别目标：
+
+```javascript
+panel.addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.smInput) {
+    // SM Input: number/boolean
+    const inp = smInputMap[el.dataset.smInput];
+    inp.value = el.type === 'checkbox' ? el.checked : parseFloat(el.value);
+  } else if (el.dataset.textRun) {
+    // Text Run
+    riveInstance.setTextRunValue(el.dataset.textRun, el.value);
+  } else if (el.dataset.vmProp) {
+    // ViewModel property
+    updateVmProperty(el.dataset.vmProp, el.dataset.vmType, el.value);
+  }
+});
+```
+
+### 9.5 CSS 结构
+
+```css
+#preview-panel {
+  width: 260px; flex-shrink: 0; overflow-y: auto;
+  background: #1f2335; border-right: 1px solid #3b4261;
+  padding: 8px; font-size: 12px;
+}
+.pv-group { margin-bottom: 8px; }
+.pv-group-title {
+  color: #7aa2f7; font-weight: 600; cursor: pointer;
+  padding: 4px 0; border-bottom: 1px solid #3b4261;
+}
+.pv-row { display: flex; align-items: center; padding: 3px 0; gap: 8px; }
+.pv-label { color: #9aa5ce; min-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.pv-input { flex: 1; background: #1a1b26; border: 1px solid #3b4261;
+            color: #c0caf5; padding: 2px 6px; border-radius: 3px; font: inherit; }
+.pv-btn { background: #3b4261; border: none; color: #c0caf5;
+          padding: 3px 12px; border-radius: 3px; cursor: pointer; }
+.pv-range { flex: 1; }
+```
+
+### 9.6 HTML 结构变更
+
+```html
+<!-- 预览 Tab 内容改为左右布局 -->
+<div id="tab-preview" class="tabcontent">
+  <div id="preview-toolbar">...</div>
+  <div id="preview-body">
+    <div id="preview-panel"></div>        <!-- 新增：左侧控制面板 -->
+    <div id="preview-container">
+      <canvas id="preview-canvas"></canvas>
+      <div id="preview-msg"></div>
+    </div>
+  </div>
+</div>
+```
+
+### 9.7 切换 Artboard/SM 时的刷新
+
+切换 Artboard 或 StateMachine 后，控制面板需要重新构建：
+- Inputs 随 StateMachine 变化
+- Text Runs 随 Artboard 变化
+- ViewModel 随 Artboard 变化
+
+在 `onPreviewAbChange` 和 `onPreviewSmChange` 的回调中调用 `buildControlPanel()`。
+
+### 9.8 工作量评估
+
+| 任务 | 预估 |
+|------|------|
+| HTML/CSS 布局（面板 + 左右分栏） | 0.5h |
+| Inputs 控件生成 + 事件绑定 | 1h |
+| Text Runs 控件 | 0.5h |
+| ViewModel 属性控件（6 种类型） | 1.5h |
+| 切换 AB/SM 时刷新 | 0.5h |
+| 测试 + 边界情况 | 1h |
+| **合计** | **~5h** |
