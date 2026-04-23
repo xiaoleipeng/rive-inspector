@@ -1,23 +1,70 @@
 # Rive Inspector
 
-[English](README.md)
+[English](README.md) · [🌐 在线体验](https://xiaoleipeng.github.io/rive-inspector/)
 
-Rive (.riv) 文件解析、可视化与性能分析工具集。提供命令行和浏览器两种使用方式，帮助设计师和开发者深入了解 .riv 文件的内部结构和运行时性能特征。
+Rive (.riv) 文件解析、可视化、性能分析与预览工具集。提供命令行和浏览器两种使用方式，帮助设计师和开发者深入了解 .riv 文件的内部结构和运行时性能特征。
 
-## 功能概览
+## ✨ 功能概览
 
-- **文本树** — 以缩进树形结构展示 .riv 文件的完整对象层级、属性值和交叉引用
-- **HTML 列表** — 可交互的 HTML 页面，支持展开/折叠、搜索过滤、类别筛选
-- **图形可视化** — Canvas 绘制的交互式节点图，支持平移/缩放、拖拽、右键菜单、属性面板
-- **性能统计** — 渲染复杂度评分、Draw calls 分析、Feather/Clip/Mesh 分析、动画/状态机指标、性能警告
-- **Web Inspector** — 独立的浏览器端 .riv 分析器（拖拽文件即用，无需 Python，支持中英文切换）
+### 🌐 Web Inspector（浏览器端）
 
-## 安装要求
+> **[立即使用 →](https://xiaoleipeng.github.io/rive-inspector/)**
+>
+> 拖拽 .riv 文件即可开始分析，无需安装。支持中英文切换。
 
-- Python 3.6+
-- 无第三方依赖
+#### 🌳 树形视图
+- 完整对象层级，支持展开/折叠
+- 全文搜索过滤
+- 类别颜色编码（结构/形状/绘制/动画/状态机...）
+- 属性显示与交叉引用解析
+- 批量展开控制（全部展开 / 全部折叠 / 展开2层）
 
-## 快速开始
+#### 📊 统计视图
+- **渲染评分**（1~5 星）— 综合复杂度评估
+- **每帧渲染成本** — drawPath / clipPath / drawImage / drawImageMesh
+- **渲染点数计算** — 基于 rive-runtime 源码的精确 GPU 开销计算，包含圆角处理（Rectangle/Polygon/Star cornerRadius）
+- **Clip 分析** — 通过 ClippingShape sourceId 解析裁剪路径渲染点数
+- **Feather 分析** — 数量、强度、内羽化模式、路径尺寸、模糊面积估算、高开销警告
+- **热点 Shape** — 多次绘制/裁剪/Mesh 的形状，可排序详情表
+- **Image 纹理** — 名称、尺寸、绘制类型（drawImage/drawImageMesh）
+- **Mesh 变形** — Mesh 数量、顶点数、关联纹理
+- **Font/Audio/Text 资源** — 嵌入大小、CDN 标记、文本内容提取
+- **动画分析** — 每帧插值属性数、路径重算检测
+- **State Machine 指标** — 层数、监听器、条件、输入、状态、转换
+- **性能警告** — 自动检测高顶点数、Draw calls、裁剪、Mesh、Feather、路径重算
+- **可点击详情弹窗** — 点击区块标题（▸）查看完整数据表
+
+#### 🔗 图形视图
+- Canvas 绘制的交互式节点图
+- 滚轮缩放、拖拽平移、点击选中
+- 双击展开/折叠子树
+- 右键菜单（聚焦子树 / 展开 / 折叠 / 恢复）
+- 工具栏快捷视图：Artboard / Timeline / StateMachine
+- 交叉引用可视化（橙色虚线连接）
+- 属性面板，支持点击交叉引用跳转
+- 📊 Stats 按钮查看图形化统计图表
+
+#### 👁 预览
+- **实时 Rive 动画播放** — 通过 Rive WASM 运行时 WebGL2 渲染
+- **Artboard / 状态机 / 动画选择** — 切换不同画板和播放目标
+- **布局适配模式** — Contain / Cover / Fill / FitWidth / FitHeight / None / ScaleDown / Layout
+- **背景切换** — 深色 / 白色 / 黑色 / 棋盘格
+- **运行时版本选择** — 15+ 版本，从 v2.20.0 到 v2.37.3
+  - 关键版本本地打包，支持离线使用（标记 ●）
+  - 内部版本高亮显示：v2.27.2（≈Android 10.1.4）、v2.27.3（≈Android 10.1.5）、v2.20.0/v2.20.2（V1）
+  - 其他版本通过 jsDelivr CDN 加载
+- **交互控制面板**（左侧边栏）：
+  - **Inputs** — 触发器按钮、布尔开关、数值滑块
+  - **Text** — 实时文本编辑（setTextRunValue）
+  - **ViewModel** — 字符串/数值/布尔/颜色/枚举/触发器属性控制
+- **3 步加载进度** — JS 下载 → WASM 加载 → 渲染器初始化
+
+#### 💾 导出
+- 导出文本报告（.txt）
+- 导出 JSON 数据（.json）
+- 导出性能统计（.txt）
+
+### 🖥 CLI 工具（Python）
 
 ```bash
 # 文本树输出
@@ -36,71 +83,68 @@ python3 dump_riv.py file.riv --stats
 python3 dump_riv.py --help
 ```
 
-### Web Inspector（浏览器端）
+环境要求：Python 3.6+，无第三方依赖。
 
-直接在浏览器中打开 `index.html`，拖拽 .riv 文件即可分析。包含树形视图、统计、图形可视化和导出四个标签页，支持中英文切换。
+## 🚀 快速开始
 
-<img width="1265" height="562" alt="图形视图" src="https://github.com/user-attachments/assets/f3b4486c-c917-40fa-b345-ad099483b160" />
+### 在线使用（推荐）
 
-## 输出模式
+访问 **[https://xiaoleipeng.github.io/rive-inspector/](https://xiaoleipeng.github.io/rive-inspector/)**，拖拽 .riv 文件即可。
 
-### 文本树（默认）
+### 本地 HTTP 服务器
 
-```
-[0] Backboard (typeKey=23) @28
-  [1] Artboard "New Artboard" (typeKey=1) @30
-    width: 155.89
-    [2] Node "Root" (typeKey=2) @69
-      [3] Shape (typeKey=3) @133
-        [4] Ellipse (typeKey=4) @144
-        [5] Fill (typeKey=20) @213
+```bash
+git clone https://github.com/xiaoleipeng/rive-inspector.git
+cd rive-inspector
+python3 -m http.server 8080
+# 打开 http://localhost:8080
 ```
 
-交叉引用自动解析：`objectId: #3 Shape (2)` 表示目标是全局索引 #3 的 Shape。
+### CLI
 
-### HTML 列表 (`--html`)
+```bash
+git clone https://github.com/xiaoleipeng/rive-inspector.git
+cd rive-inspector
+python3 dump_riv.py your_file.riv --stats
+```
 
-生成可交互页面：展开/折叠节点、全文搜索、类别过滤、批量展开控制。
-
-### 图形可视化 (`--graph`)
-
-Canvas 节点图，支持：
-- 鼠标滚轮缩放、拖拽平移
-- 点击节点查看属性、双击展开/折叠
-- 右键菜单（聚焦子树/展开/折叠/恢复）
-- 工具栏快捷视图：Artboard / Timeline / StateMachine
-- 交叉引用可视化（橙色虚线连接）
-- 📊 Stats 按钮查看图形化统计图表
-
-### 性能统计 (`--stats`)
-
-输出渲染评分（1~5 星）、每帧渲染成本、热点 Shape、Image 纹理、Mesh 变形、Feather 模糊分析、Font/Audio/Text 资源、动画复杂度、State Machine 指标和性能警告。
-
-<img width="1852" height="693" alt="统计视图" src="https://github.com/user-attachments/assets/ea082f4c-b1a8-4e97-8a8a-f785d5febd47" />
-
-## 项目结构
+## 📁 项目结构
 
 ```
 rive-inspector/
-├── dump_riv.py          # CLI：.riv 解析器、树构建、文本/HTML/Stats 输出
-├── riv_graph.py         # CLI：Canvas 图形可视化和 Stats 图表生成模块
-├── riv_schema.json      # 类型和属性名映射表（从 rive-runtime 源码提取）
-├── index.html           # Web Inspector：独立的浏览器端 .riv 分析器
+├── index.html              # Web Inspector（独立单文件）
+├── dump_riv.py             # CLI：.riv 解析器、树构建、文本/HTML/统计输出
+├── riv_graph.py            # CLI：Canvas 图形可视化生成模块
+├── riv_schema.json         # 类型/属性名映射表（来自 rive-runtime）
+├── vendor/rive/            # 本地打包的 Rive WASM 运行时（离线支持）
+│   ├── 2.37.3/             # 最新版本
+│   ├── 2.27.2/             # ≈Android 10.1.4
+│   ├── 2.27.3/             # ≈Android 10.1.5
+│   └── .../                # 其他关键版本
 ├── docs/
-│   ├── RIV_FORMAT.md    # .riv 二进制格式技术规范
-│   ├── USAGE.md         # CLI 详细使用说明
-│   ├── PERFORMANCE_GUIDE.md  # 性能指标详解与优化指南
-│   └── PREVIEW_FEASIBILITY.md  # Rive 预览集成可行性报告
+│   ├── RIV_FORMAT.md       # .riv 二进制格式技术规范
+│   ├── USAGE.md            # CLI 使用说明
+│   ├── PERFORMANCE_GUIDE.md # 性能指标与优化指南
+│   ├── PREVIEW_DESIGN.md   # 预览功能技术设计
+│   └── PREVIEW_FEASIBILITY.md # 预览集成可行性报告
 ├── examples/
-│   └── clip.riv         # 测试用 .riv 文件
-├── LICENSE
+│   └── clip.riv            # 示例 .riv 文件
+├── LICENSE                 # MIT
 └── README.md
 ```
 
-## 典型工作流
+## 📖 文档
+
+- [docs/USAGE.md](docs/USAGE.md) — CLI 使用说明和输出示例
+- [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md) — 性能指标详解与优化检查清单
+- [docs/RIV_FORMAT.md](docs/RIV_FORMAT.md) — .riv 二进制格式技术规范
+- [docs/PREVIEW_DESIGN.md](docs/PREVIEW_DESIGN.md) — 预览功能技术设计
+- [docs/PREVIEW_FEASIBILITY.md](docs/PREVIEW_FEASIBILITY.md) — 预览集成可行性报告
+
+## 🔧 典型工作流
 
 ```bash
-# 1. 快速评估性能
+# 1. 快速性能评估
 python3 dump_riv.py animation.riv --stats
 
 # 2. 定位性能瓶颈（图形化）
@@ -111,12 +155,6 @@ python3 dump_riv.py before.riv --stats > before.txt
 python3 dump_riv.py after.riv --stats > after.txt
 diff before.txt after.txt
 ```
-
-## 文档
-
-- [docs/USAGE.md](docs/USAGE.md) — 完整使用说明和输出示例
-- [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md) — 性能指标详解与优化检查清单
-- [docs/RIV_FORMAT.md](docs/RIV_FORMAT.md) — .riv 二进制格式技术规范
 
 ## 许可证
 
